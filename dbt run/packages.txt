@@ -1,0 +1,9 @@
+1.create new packages.yml with packages:
+
+packages:
+  - package: dbt-labs/codegen
+    version: 0.9.0
+
+2. save in the project (not under folder)
+3. run "dbt dept"
+4. packages shall be update in "dbt_packages" folder

@@ -1,0 +1,3 @@
+
+dbt run -s tag:a tag:b // run models with tag a or tag b
+dbt run -s tag:a,tag:b // run models with tag a and tag b

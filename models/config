@@ -1,0 +1,10 @@
+materilization
+
+{{ config(materialized='table') }}   
+{{ config(materialized='view') }} 
+{{ config(materialized='increment') }} 
+
+
+materilization- increment
+
+{{ config(materialized='increment') }} 

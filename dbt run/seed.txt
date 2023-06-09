@@ -1,0 +1,1 @@
+dbt seed  // run all seed in the project

@@ -1,0 +1,2 @@
+dbt docs generate // dbt generate all documentation, in dbt cloud you can see the documentation
+dbt docs serve
