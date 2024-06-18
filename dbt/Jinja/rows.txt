@@ -1,0 +1,16 @@
+{%- -%} // for loop or if will add row un the logs. add "-" will remove the added empty row 
+
+
+{% set x='my age' %}
+{% set y='20' %}
+
+{{ x }} is {{ y }} // my age is 20
+
+
+{% macro no_nulls_in_columns(model) %}
+ SELECT * FROM {{ model }} WHERE
+ {% for col in adapter.get_columns_in_relation(model) -%}
+ {{ col.column }} IS NULL OR
+ {% endfor %}
+ FALSE
+{% endmacro %}

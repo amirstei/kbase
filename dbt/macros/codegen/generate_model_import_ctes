@@ -1,0 +1,1 @@
+ dbt run-operation generate_model_import_ctes --args '{model_name: <model_name>}'

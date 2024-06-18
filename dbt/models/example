@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: jaffle_shop
+    columns:
+      - name: customer_id
+        description: "{{ doc('md_file') }}"
+        tests:
+          - unique
+          - not null
+          - accepted_values:
+            values:
+              - completed
+              - shipped
+              - returned
+              - return_pending
+              - placed
+      - name: orders

@@ -1,0 +1,23 @@
+// add docs with .md file like macro under models
+
+{% docs <doc_name> %}
+
+text
+
+{% enddocs %}
+
+in the description, yml file:
+
+- name: <column_name>
+    description: '{{ doc("<doc_name>") }}'
+
+
+// if we want to change the overview page (docs generate, docs serve)
+
+{% docs __overview__% }
+
+# <Header>
+text
+[input schema](<pic path to add a picture)
+
+{% enddocs %}

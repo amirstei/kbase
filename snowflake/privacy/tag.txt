@@ -1,0 +1,12 @@
+--create
+CREATE OR REPLACE TAG dwh.governance.tag_sensitive;
+
+--set
+
+ALTER TAG dwh.governance.tag_sensitive SET MASKING POLICY dwh.governance.mp_string;
+ALTER TAG dwh.governance.tag_sensitive SET MASKING POLICY dwh.governance.mp_integer;
+ALTER TAG dwh.governance.tag_sensitive SET MASKING POLICY dwh.governance.mp_date;
+ALTER TAG dwh.governance.tag_sensitive SET MASKING POLICY dwh.governance.mp_float;
+
+-- unset
+ALTER TAG dwh.governance.tag_sensitive UNSET MASKING POLICY dwh.governance.mp_string;

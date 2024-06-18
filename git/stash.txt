@@ -1,0 +1,4 @@
+git stash
+git stash pop
+git stash list
+git stash apply stash@{0}   // to choose the change

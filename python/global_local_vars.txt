@@ -1,0 +1,11 @@
+-- row 6 cannot be execute because we shall define the "enemies" var (example: enemies=1). to use golbal var in local func we can use "global" or use return
+
+enemies=1
+
+def func():
+    ## solution: global enemies ##
+    enemies+=1
+    print(f"value in {enemies}")
+
+func()
+print(f"value in {enemies}")

@@ -1,0 +1,28 @@
+command
+dbt run-operation get_entity_meta_data --args '{node_type: dwh_finance_afx_wbs,resource_type:,entity:}'
+
+macro
+
+{% macro get_entity_meta_data(
+  node_type,
+  resource_type,
+  entity,
+  debug = false
+  ) %}
+
+  {% if execute %}
+    {# {% set debug = false%}  #}
+    {% set unique_id = resource_type ~ "." ~
+                       project_name ~ "." ~ entity %}
+    {% set res = graph [node_type] [unique_id] %}
+    {% if res %}
+      {{ log(tojson(res), info = true) if debug}}
+      {{ return(res) }}
+    {% else %}
+      {{ exceptions.raise_compiler_error(
+        "Entity does not exists within project : " ~ unique_id
+      ) }}
+    {% endif %}
+
+  {% endif %}
+{% endmacro %}

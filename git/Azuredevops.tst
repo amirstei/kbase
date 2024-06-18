@@ -1,0 +1,1 @@
+git config --global http.proxy http://genproxy:8080  // to have the option to push from amdocs wifi to remote

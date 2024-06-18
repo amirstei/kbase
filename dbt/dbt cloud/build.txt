@@ -1,0 +1,8 @@
+- dbt cloud account
+    - project (snowflake url, repo)
+        - environment (db, branch)
+            - jobs (models under the branch / tag)
+
+
+https://docs.getdbt.com/docs/cloud/manage-access/about-user-access
+https://docs.getdbt.com/docs/cloud/manage-access/enterprise-permissions

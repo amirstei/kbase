@@ -1,0 +1,34 @@
+dictionary= {"key","value"}
+
+-- Add key and value
+dictionary= {"key2","value2"}
+
+-- read from dictionary
+print(dictionary["key"])
+
+-- empty dictionary
+empty_dict={} or empty_dict[]
+
+--for loop keys
+
+for x in thisdict:
+  print(x)
+  
+  or
+
+for x in thisdict.keys():
+  print(x)
+
+--for loop values
+for x in thisdict:
+  print(thisdict[x])
+
+or
+
+for x in thisdict.values():
+  print(x)
+
+-- print keys and values
+
+for x, y in thisdict.items():
+  print(x, y)

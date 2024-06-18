@@ -1,0 +1,15 @@
+// to add images to the project we can add them to assetsfolder
+then tgo to dbt_project yml file and add 
+
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+assets-paths: ["assets"]
+
+download a pic to assets:
+
+curl <url> -o assets/input_schema.png

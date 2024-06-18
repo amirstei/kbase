@@ -1,0 +1,5 @@
+Press the Windows key + R at the same time to launch the Run dialog.
+Copy and paste the following path: %userprofile%\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadline
+Press Enter.
+The File Explorer will open the specified path.
+Edit the ConsoleHost_history.txt and Visual Studio Code Host_history.txt files manually to remove specific lines or all the content.

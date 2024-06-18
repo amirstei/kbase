@@ -1,0 +1,1 @@
+ dbt run-operation generate_base_model --args '{source_name: <source_name>, table_name: <table_name>}'

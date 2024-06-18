@@ -1,0 +1,11 @@
+-- To get list of all tables with specific owner
+
+show tables in database stg;
+select 'grant ownership on ' || "database_name" || '.' || "schema_name" || '.' || "name" || ' to role sf_ado_developers copy current grants;' 
+from  table (result_scan(last_query_id()))
+where "schema_name" ilike 'eliran_%' and "owner"!='SF_ADO_DEVELOPERS'
+
+show views in database stg;
+select 'grant ownership on ' || "database_name" || '.' || "schema_name" || '.' || "name" || ' to role sf_ado_developers copy current grants;' 
+from  table (result_scan(last_query_id()))
+where "schema_name" ilike 'eliran_%' and "owner"!='SF_ADO_DEVELOPERS'

@@ -1,0 +1,3 @@
+show grants on schema dwh.amir_privacy; 
+select 'GRANT ' || "privilege"  ||  ' ON ' || "granted_on"  ||' '||  'DATABASE.SOURCE_SCHEMA'  || ' TO ROLE ' || "grantee_name" || ';' 
+from table (result_scan(last_query_id()));

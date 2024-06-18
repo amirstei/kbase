@@ -1,0 +1,9 @@
+
+y="9"
+y=int(y)
+print(type(y))
+
+int 
+string
+boolean
+float

@@ -1,0 +1,8 @@
+
+when model materilization is increment
+
+{% if is_incremental() %}
+
+  where injestion > (select max(event_time) from {{ this }})
+
+{% endif %}

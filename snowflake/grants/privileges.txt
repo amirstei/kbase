@@ -1,0 +1,69 @@
+-- usage 
+
+GRANT USAGE ON SCHEMA
+GRANT USAGE ON DATABASE
+GRANT USAGE ON ALL SCHEMAS IN DATABASE
+GRANT USAGE, OPERATE ON WAREHOUSE // usage- can run queries. in query history can see only user own queries. 
+                                     operate- can resume wh + can see all users queries in query history that running in the same wh 
+                                     both- each user can see hos own query result_scan
+
+-- select
+GRANT SELECT ON TABLE
+GRANT SELECT ON ALL TABLES IN DATABASE
+GRANT SELECT ON FUTURE TABLES IN DATABASE
+
+GRANT SELECT ON VIEW
+GRANT SELECT ON ALL VIEWS IN DATABASE 
+GRANT SELECT ON FUTURE VIEWS
+
+-- create
+GRANT CREATE SCHEMA ON DATABASE 
+GRANT CREATE TABLE,CREATE VIEW ON ALL SCHEMAS IN DATABASE
+GRANT CREATE TABLE,CREATE VIEW ON FUTURE SCHEMAS IN DATABASE
+GRANT CREATE FUNCTION ON ALL SCHEMAS IN DATABASE
+GRANT CREATE PROCEDURE ON ALL SCHEMAS IN DATABASE
+GRANT CREATE STAGE ON ALL SCHEMAS IN DATABASE
+GRANT CREATE STAGE ON FUTURE SCHEMAS IN DATABASE
+GRANT CREATE MASKING POLICY ON SCHEMA 
+GRANT CREATE TAG ON SCHEMA
+GRANT CREATE ROW ACCESS POLICY ON ACCOUNT // BY ACCOUNTADMIN
+
+
+-- apply // by accountadmin ON SCHEMA- BY SEC ADMIN
+grant apply tag on account
+grant apply masking policy on account
+grant apply row access policy on account
+
+-- delete,insert,update
+GRANT INSERT,DELETE,UPDATE ON ALL TABLES IN DATABASE
+GRANT INSERT,DELETE,UPDATE ON FUTURE TABLES IN DATABASE
+GRANT INSERT,DELETE,UPDATE ON ALL ON ALL VIEWS IN DATABASE
+GRANT INSERT,DELETE,UPDATE ON FUTURE VIEWS IN DATABASE
+
+
+-- pattern
+set access_role = '';
+set database_name = '';
+
+
+------------------------------------------------------------------------
+GRANT USAGE, OPERATE ON WAREHOUSE DEV_DWH_WH TO ROLE identifier($access_role);
+
+GRANT USAGE ON DATABASE identifier($database_name) TO ROLE identifier($access_role);
+GRANT USAGE ON ALL SCHEMAS IN DATABASE identifier($database_name) TO ROLE identifier($access_role);
+
+----------------------------------READ----------------------------------------
+
+GRANT SELECT ON ALL TABLES IN DATABASE identifier($database_name) TO ROLE identifier($access_role);
+GRANT SELECT ON ALL VIEWS  IN DATABASE identifier($database_name) TO ROLE identifier($access_role);
+GRANT SELECT ON FUTURE TABLES IN DATABASE identifier($database_name) TO ROLE identifier($access_role);
+GRANT SELECT ON FUTURE VIEWS  IN DATABASE identifier($database_name) TO ROLE identifier($access_role);
+
+----------------------------------WRITE----------------------------------------
+
+GRANT INSERT,DELETE,UPDATE ON ALL TABLES IN DATABASE         identifier($database_name) TO ROLE identifier($access_role);
+GRANT INSERT,DELETE,UPDATE ON ALL VIEWS IN DATABASE          identifier($database_name) TO ROLE identifier($access_role);
+GRANT INSERT,DELETE,UPDATE ON FUTURE TABLES IN DATABASE      identifier($database_name) TO ROLE identifier($access_role);
+GRANT INSERT,DELETE,UPDATE ON FUTURE VIEWS IN DATABASE       identifier($database_name) TO ROLE identifier($access_role);
+GRANT CREATE TABLE,CREATE VIEW ON ALL SCHEMAS IN DATABASE    identifier($database_name) TO ROLE identifier($access_role); 
+GRANT CREATE TABLE,CREATE VIEW ON FUTURE SCHEMAS IN DATABASE identifier($database_name) TO ROLE identifier($access_role); 

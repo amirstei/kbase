@@ -1,0 +1,6 @@
+-- create the yml file to an exists model
+pip install dbt-invoke
+dbt-invoke properties --select <model_name>
+
+-- build for all models in project
+ dbt-invoke properties --threads 4

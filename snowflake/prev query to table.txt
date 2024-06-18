@@ -1,0 +1,9 @@
+show users;
+from table (result_scan(last_query_id()));
+
+// run previous query as table
+
+
+show GRANTS to role ac_sf_ado_business_analyst ;
+select 'GRANT ' || "privilege"  ||  ' ON ' || "granted_on"  ||' DWH.GOVERNANCE '|| "TO" 'DATABASE.SOURCE_SCHEMA'  || ' TO ROLE ' || "grantee_name" || ';' 
+from table (result_scan(last_query_id()));

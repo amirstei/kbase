@@ -1,0 +1,3 @@
+dbt ls --resource-type test     // all tests
+dbt ls -s tag:<tag_name>        // by tag
+dbt ls -s base.*                // base models

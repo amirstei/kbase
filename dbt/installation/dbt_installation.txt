@@ -1,0 +1,14 @@
+1. download python
+2. download vs code
+3. open a folder for the project
+4. open vscode-> open the project folder
+5. run: py -m venv venv
+6. If its not run thats a powerhsell issue
+7. open power shell as administrator-> run:get-executionPolicy -> if its not REMOTESIGNED -> run: set get-executionPolicy REMOTESIGNED
+8. run: venv\Scripts\activate.ps1 // or without.ps1 -> virtual environment shall be appear
+9. run: pip install dbt-snowflake(==1.3.0 if specific version) 
+10. run: dbt --version to make sure the installation success
+11. run: dbt init to create a new dbt project
+12. if the project not in the venv folder we can move the files into the venv folder
+13. in google search to download git -> download
+14. go to git bash-> cd the project folder -> run: git init (in git bash)

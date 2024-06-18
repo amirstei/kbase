@@ -1,0 +1,20 @@
+materilization types
+
+{{ config(materialized='table') }}   
+{{ config(materialized='view') }} 
+{{ config(materialized='increment') }} 
+
+Hirarchy: 
+dbt_project under models-> dbt_project under the model -> model yml file -> model config (most powerfull)
+
+materilization- increment
+
+{{ 
+    config(materialized='increment',
+    incremental_strategy='merge'
+    merge_exclude_columns = ['ETL_Insert_Date']                     // column that not update in the merge 
+    unique_key=['WBS_Code','DPR_Type','DPR_Line','Line_Item']       // keys for the merge ( merge t using s on ...)
+    post_hook= "{{ is_deleted() }}"                                 // can run query or macro after model is running
+
+          ) 
+}} 

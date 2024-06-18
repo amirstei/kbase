@@ -1,0 +1,8 @@
+Yes; Defer to Hourly run all models
+
+
+-- DEV
+defer to previous run state?
+self: hourly run all models (qa-dwh)
+commands:
+dbt run --select state:modified+ --exclude cbu_ovh_adjustment

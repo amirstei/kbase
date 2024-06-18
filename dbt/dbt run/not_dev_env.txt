@@ -1,0 +1,1 @@
+dbt run -s <model_name>  -- target prod   

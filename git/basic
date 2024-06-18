@@ -1,0 +1,2 @@
+dbt run -s <model_name>
+dbt run -s <folder> // will run all models in the folder

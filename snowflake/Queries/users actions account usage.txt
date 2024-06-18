@@ -1,0 +1,8 @@
+select start_time, user_name, role_name, query_type,database_name,schema_name,query_text,execution_status,query_id
+from snowflake.account_usage.query_history
+where query_type in ('UPDATE', 'INSERT', 'DELETE')
+and query_text not like '%Tableau%'
+and user_name not in ('ADO_DBT','ADO_SSIS_PROD','SB_PROD')
+and database_name in ('DWH','SB')
+and to_date(start_time) between  to_date(dateadd(day, -1, current_timestamp())) and to_date(current_timestamp())
+order by start_time desc

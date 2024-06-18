@@ -1,0 +1,15 @@
+{% macro set_query_tag() -%}
+  {% set new_query_tag = {} %}
+{% if new_query_tag.update({'model':model.name}) %} {% endif %}
+{% if new_query_tag.update({'original_query_tag':get_current_query_tag()}) %} {% endif %}
+{% if new_query_tag.update({'business_model':config.get('business_model')}) %} {% endif %}
+{% if new_query_tag.update({'object_type':config.get('object_type')}) %} {% endif %}
+
+  {% if new_query_tag %}
+    {% set original_query_tag = get_current_query_tag() %}
+    {{ log("Setting query_tag to '" ~ new_query_tag ~ "'. Will reset to '" ~ original_query_tag ~ "' after materialization.") }}
+    {% do run_query('alter session set query_tag = "{}"'.format(new_query_tag)) %}
+    {{ return(original_query_tag)}}
+  {% endif %}
+  {{ return(none)}}
+{% endmacro %}

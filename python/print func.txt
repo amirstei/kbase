@@ -1,0 +1,18 @@
+name = 'john moshe'
+print( f'Hello {name}'.title() ) // f- insert the name, title will upper case first char
+
+name = 'john moshe!'
+print( f'Hello {name}'.replace("!","?") ) // replace char
+
+name = 'john moshe!'
+print( f'Hello {name}'.find("oh") ) -- 7, starting "hello..."
+
+name = 'john moshe!                '
+print( f'Hello {name}'.strip() ) // remove spaces. can use lstrip / rstrip
+
+name = 'john moshe!'
+print( f'Hello {name}'.split("o") ) // split the string to list []
+
+print( type(num) ) // print data type
+
+print(f"my name is {amir}d) // d means that text 

@@ -1,0 +1,6 @@
+class- including lot of objects
+for each object:
+            - attributes (is_something=true,is_something_else=[1,2,3])  -- things object has
+            - methods (def a, def b )                                   -- things object do
+
+car=CarBlueprint() (car==object, CarBlueprint==class)

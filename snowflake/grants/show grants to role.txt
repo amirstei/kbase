@@ -1,0 +1,10 @@
+show grants to role sf_ado_developers;
+select *, 'grant ownership on ' || "granted_on" || ' ' || "name" || ' to role dbt copy current grants;' 
+from  table (result_scan(last_query_id()))
+where "privilege" ilike '%owner%' and "name" ilike 'sb.finance%' and "granted_on" in ('TABLE','VIEW')
+;
+
+
+how grants to role AC_SF_CDO_DEVELOPERS; --"*SF_CDO_DEVELOPERS";
+select 'GRANT ' || "privilege"  ||  ' ON ' || "granted_on" || ' ' || "name"  || ' TO ROLE ' --|| "grantee_name" || ';' 
+c
