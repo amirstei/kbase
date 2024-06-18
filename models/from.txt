@@ -1,8 +1,0 @@
-        from model
-
-select * from {{ ref('stg_customers')}}
-
-
-        from source
-
-{{ source('jaffle_shop', 'orders') }} // source name, table from yml file

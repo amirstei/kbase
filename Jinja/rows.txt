@@ -1,1 +1,0 @@
-{%- -%} // for loop or if will add row un the logs. add "-" will remove the added empty row 
