@@ -1,0 +1,9 @@
+pycharm -> settings -> project -> project interpreter -> choose the right project
+-> add interpreter -> add local interpreter -> pipenv environment -> click 3 points
+
+option 1:
+go to users -> your name -> .local -> the relevant env -> bin -> python 3.11
+
+option 2:
+Go to finder -> users -> amir.s ->.local -> show hide folders (cmnd+shft+.) 
+-> .local -> right click on the lower path -> get path -> copy path in the 

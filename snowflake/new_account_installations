@@ -1,0 +1,28 @@
+-- db
+create or replace database amir_raw;
+create or replace database amir_dwh;
+create or replace database amir_datasets;
+
+-- schemas 
+select 'create or replace schema amir_raw.' || lower(schema_name) ||';'
+from stg6_raw.information_schema.schemata
+where lower(schema_name) not in ('public','information_schema','airbyte_internal')
+;
+select 'create or replace schema amir_dwh.' || lower(schema_name) ||';'
+from stg6_dwh.information_schema.schemata
+where lower(schema_name) not in ('public','information_schema','airbyte_internal')
+;
+select 'create or replace schema amir_datasets.' || lower(schema_name) ||';'
+from stg6_datasets.information_schema.schemata
+where lower(schema_name) not in ('public','information_schema','airbyte_internal')
+;
+-- run in python
+from db_schema.db_schema_utils import get_db_objects, object_identifier
+raw = get_db_objects(root_path="raw", object_types=["table"])
+for table in raw:
+    print(f"create or replace view amir_raw.{table.schema_name}.{table.name} as select * from STG6_RAW.{table.schema_name}.{table.name};")
+
+
+python src/schema_evolution.py -r dwh
+python src/schema_evolution.py -r datasets
+

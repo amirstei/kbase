@@ -1,0 +1,15 @@
+from esh_data_core.db_schema.db_schema_utils import SnowflakeSqlFunction, SnowflakeColumn
+
+
+db_object = SnowflakeSqlFunction(
+    name="report_827_3",
+    schema_name="boi_reports",
+    db_name="datasets",
+    result_data_type="table",
+    args=[
+        SnowflakeColumn(name="arg_value_date", data_type="date", default="current_date()")
+    ],
+    result_columns=[SnowflakeColumn(name="boi_code", data_type="string")] +
+                   [SnowflakeColumn(name=f"bucket_{idx + 1}", data_type="number(27, 9)") for idx in range(16)],
+    function_definition_path="datasets/boi_reports/function_boi_827_3.sql"
+)

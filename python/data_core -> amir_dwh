@@ -1,0 +1,25 @@
+A. schema_evolution
+
+    python src/schema_evolution.py -r dwh  // build and align dwh according .env 
+
+    python src/schema_evolution.py -r <path-to-new-file>
+        
+        example:
+        python src/schema_evolution.py -r datasets/fin/function_liquidity_kpi_max_daily_expected_cash_outflows_to_total_hqla
+
+B. fill the tables:
+    python src/main.py -t dwh -r core
+
+    example: python src/main.py -t dwh -r loans/dwh_dim_loans_attributes_templates.sql    
+
+
+Steps to update table columns:
+1. python files are the build of the object, add the columns
+2. Go to db_schema_utils -> enable_schema_evolution -> True  // false is default, change  True to define the schema_evulution job to move all tables, compare the changes and add the new fields
+3. run A 
+4. run B to fill the data
+
+
+create new schema in raw and objects in the schema
+
+python src/init_raw_cdc_tables.py -r raw/<new schema>

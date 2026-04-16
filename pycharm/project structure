@@ -1,0 +1,23 @@
+    project structure
+
+tests: green
+source: blue
+exclude: red
+
+
+1. settings-> project structure
+bank_1:
+    blue: src, moduls
+    green: tests
+
+pocketfuldb:
+    blue: src
+    green: tests
+
+pocketfultests:
+    blue: src
+    green: tests
+    red: log
+
+service_lcpa:
+    blue: src

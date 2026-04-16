@@ -1,0 +1,56 @@
+.claude/
+├── README.md                    # This file - overview of workspace skills
+├── settings.json                # Workspace configuration (committed)
+├── settings.local.json          # Local configuration overrides (git-ignored)
+├── skills/
+│   ├── eos:code-gen/       # JIRA workflow — parallel agents, back navigation (canonical)
+│   │   ├── SKILL.md
+│   │   └── specialists/
+│   │       ├── analysis-explorer.md   # Per-repo exploration agent prompt
+│   │       └── verify-runner.md       # Per-repo verification agent prompt
+│   ├── eos:auto-pickup/         # Autonomous ticket pickup (claims ready_for_ai tickets)
+│   │   └── SKILL.md
+│   ├── shared/
+│   │   ├── README.md            # Quality system overview — how the three layers relate
+│   │   ├── jira-tools.md        # JIRA MCP tool discovery (used by story-gen, story-enhance)
+│   │   ├── subtask-explorers/   # Per-repo exploration prompts (used by story-gen, story-enhance)
+│   │   ├── verify/              # Shared per-repo verification rules (used by eos:code-gen Phase 4)
+│   │   │   ├── README.md
+│   │   │   ├── bank_1.md
+│   │   │   ├── customers_rn.md
+│   │   │   ├── data_core.md
+│   │   │   ├── esh_mobile.md
+│   │   │   ├── pocketfulbackoffice.md
+│   │   │   ├── pocketfulserver.md
+│   │   │   └── trident.md
+│   │   ├── coding-standards/    # Repo-specific coding standards (used by eos:code-gen Phase 3)
+│   │   │   └── bank_1.md
+│   │   └── critique/            # Repo-specific critique checklist supplements (used by eos:critique)
+│   │       └── bank_1.md
+│   ├── eos:create-release/      # Create release branches and deploy
+│   ├── eos:critique/            # Critical review of branch changes
+│   ├── eos:review_backend/      # Structured PR review pipeline (4-phase, parallel agents)
+│   │   ├── SKILL.md
+│   │   ├── pr_overview_creator.md
+│   │   ├── pr_code_reviewer.md
+│   │   ├── pr_comment_poster.md
+│   │   ├── pr_comparing_changes.md
+│   │   └── specialists/
+│   │       ├── pr_project_standards_specialist.md
+│   │       └── pr_language_specialist.md
+│   ├── eos:deploy-hotfix/       # Deploy hotfix to mimic2
+│   ├── eos:onboarding/          # Set up development environment
+│   ├── eos:feature-flags-audit/  # Feature flags audit across repos + GrowthBook
+│   ├── eos:story-gen/            # Decompose capability docs into JIRA stories
+│   │   └── SKILL.md
+│   ├── eos:story-enhance/       # Enrich existing JIRA story with codebase exploration
+│   │   └── SKILL.md
+│   ├── eos:tech-debt/           # Create structured tech debt stories under TT-1910
+│   └── eos:update-workspace/    # Update all repositories to latest
+└── commands/
+    ├── eos:auto-pickup.md       # /eos:auto-pickup - Autonomous ticket pickup
+    ├── eos:code-gen.md          # /eos:code-gen - Primary JIRA workflow entry point
+    ├── eos:jira.md              # /eos:jira - Legacy alias (redirects to eos:code-gen)
+    ├── eos:onboarding.md        # /eos:onboarding command
+    ├── eos:review_backend.md    # /eos:review_backend - PR review pipeline
+    └── eos:update-workspace.md  # /eos:update-workspace command

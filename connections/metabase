@@ -1,0 +1,10 @@
+-- stg5
+
+1. open terminal
+2. aws ssm start-session --profile esh-bank-il-stg5 --target i-0b2183dde1d85fdf3 --region eu-west-1 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters '{"portNumber":["80"],"localPortNumber":["8081"],"host":["internal-metabase-webapp-739276740.eu-west-1.elb.amazonaws.com"]}'
+3. open chrome -> http://127.0.0.1:8081/auth/login
+4. insert username + password (from admin)
+
+-- mimic
+
+aws ssm start-session --region il-central-1 --target i-0906bbd12b1343c03  --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters 'host=["internal-metabase-webapp-331188875.il-central-1.elb.amazonaws.com"], portNumber=["80"], localPortNumber=["8080"]' & wait

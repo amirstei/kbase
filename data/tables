@@ -1,0 +1,3 @@
+core_db.datasets_tamplates
+
+The reports list. to get the report id go to back office -> click F12 -> Network (name is the id) -> Payload (vars from report to query)

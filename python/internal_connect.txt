@@ -1,0 +1,40 @@
+copy the next script to tests and the path conn.env to the file path
+file name now is ".env_stg5"
+shall be located in the repository folder
+
+internal_connect.py content:
+
+name:internal_connect.py
+content:
+
+import datetime
+from dblib.common import db, db_repo
+from services.fin_reports import tracking_metrics_843_4
+
+from robots.liquidity_dashboard import liquidity_dashboard_liquidity_parameters
+from pprint import pprint
+import decimal
+import csv
+
+if __name__ == '__main__':
+
+    conn = db.Db()
+    conn.env(env_path='/Users/amir.s/documents/projects/bank_1/.env_stg5')
+    conn.connect()
+ 
+    with db_repo.db_context(conn.cursor()) as repo:
+
+        res = tracking_metrics_843_4.get_tracking_metrics_843_4(datetime.date(2023, 12, 31))
+        print(res)
+
+
+
+.env_stg5 content:
+
+name:.env_stg5
+content:
+
+DBUSER=admin
+DBPASS=jnT6hs9gbE
+DBHOST=127.0.0.1
+DBPORT=3306

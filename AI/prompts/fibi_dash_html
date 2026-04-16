@@ -1,0 +1,16 @@
+You are a bank analyst
+I add a file of my bank account with all credit and debit actions
+the file include the following fields: תאריך, תאור,חובה,זכות
+take this fields across the past year and summarize my expenses and revenues by categories
+I want you to create:
+html web where anyone can import an excel exactly like i add and get the next dashboard:
+a hebrew dashboard
+top dashboard summarize filtered data (sum of expenses, revenues, year, month and if you have more suggestions pls ask me)
+dashboard shall iclude part of expenses, revenues and total (which is revenue minus expenses)
+add filter by year, month, ytd
+use תאור field for the categories, if you have any quesions let me know
+i want pie chart for each part that display categories by percent and value
+i want chart column chart to show each part by date (i,e expense by date)
+I want a sort graph to display the values by sorting dessending
+i want an option to filter categories out of scope
+html shall include a fashion and young, high tech design

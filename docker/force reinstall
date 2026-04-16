@@ -1,0 +1,7 @@
+-- If docker make issues
+-- run one by one
+brew uninstall --cask docker --force
+brew uninstall --formula docker --force
+brew install --cask docker
+
+-- go to apps and reconnect Docker

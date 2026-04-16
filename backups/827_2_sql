@@ -1,0 +1,164 @@
+-- BOI 827-2: Balance sheet aggregation report
+-- All base rows are initialized to zero. Subtotal rows are computed via SQL arithmetic.
+-- This faithfully mirrors the bank_1 boi_827_2.py logic.
+
+with base_rows as (
+    select column1 as boi_code
+    from (
+        values
+            ('1'), ('2'), ('3'), ('4'), ('5'),
+            ('6'), ('7'), ('8'), ('9'), ('10'),
+            ('11'), ('12'), ('13'), ('14'), ('15'),
+            ('16'), ('17'), ('18'), ('19'), ('20'),
+            ('21'), ('22'), ('23'), ('24'), ('25'),
+            ('26'), ('27'), ('28'), ('29'), ('30'),
+            ('31'), ('32'), ('33'), ('34'), ('35'),
+            ('36'), ('37'), ('38'), ('39'), ('40'),
+            ('41'), ('42'), ('43'), ('44'), ('45'),
+            ('46'), ('47'), ('48'), ('49'), ('50')
+    )
+),
+
+-- All values are zero; subtotal rows are computed below
+zero_rows as (
+    select
+        boi_code,
+        0::number(27, 9) as bucket_1,
+        0::number(27, 9) as bucket_2,
+        0::number(27, 9) as bucket_3,
+        0::number(27, 9) as bucket_4,
+        0::number(27, 9) as bucket_5,
+        0::number(27, 9) as bucket_6,
+        0::number(27, 9) as bucket_7,
+        0::number(27, 9) as bucket_8,
+        0::number(27, 9) as bucket_9,
+        0::number(27, 9) as bucket_10,
+        0::number(27, 9) as bucket_11,
+        0::number(27, 9) as bucket_12,
+        0::number(27, 9) as bucket_13,
+        0::number(27, 9) as bucket_14,
+        0::number(27, 9) as bucket_15,
+        0::number(27, 9) as bucket_16
+    from base_rows
+),
+
+-- Aggregate helper: sum of selected boi_code rows across all bucket columns
+agg as (
+    select
+        sum(bucket_1)  as bucket_1,
+        sum(bucket_2)  as bucket_2,
+        sum(bucket_3)  as bucket_3,
+        sum(bucket_4)  as bucket_4,
+        sum(bucket_5)  as bucket_5,
+        sum(bucket_6)  as bucket_6,
+        sum(bucket_7)  as bucket_7,
+        sum(bucket_8)  as bucket_8,
+        sum(bucket_9)  as bucket_9,
+        sum(bucket_10) as bucket_10,
+        sum(bucket_11) as bucket_11,
+        sum(bucket_12) as bucket_12,
+        sum(bucket_13) as bucket_13,
+        sum(bucket_14) as bucket_14,
+        sum(bucket_15) as bucket_15,
+        sum(bucket_16) as bucket_16,
+        group_id
+    from (
+        -- boi code 14 = sum of rows 6, 7, 8, 9, 10, 11 (total securities)
+        select *, '14' as group_id from zero_rows where boi_code in ('6', '7', '8', '9', '10', '11')
+        union all
+        -- boi code 21 = sum of rows 16, 17, 19 (total credit to public)
+        select *, '21' as group_id from zero_rows where boi_code in ('16', '17', '19')
+        union all
+        -- boi code 24 = sum of rows 1, 3, 5, 14, 15, 21, 22, 23 (total assets)
+        select *, '24' as group_id from zero_rows where boi_code in ('1', '3', '5', '14', '15', '21', '22', '23')
+        union all
+        -- boi code 35 = sum of rows 30, 32, 34 (total public deposits)
+        select *, '35' as group_id from zero_rows where boi_code in ('30', '32', '34')
+        union all
+        -- boi code 40 = sum of rows 27, 28, 29, 35, 36, 37, 38, 39 (total liabilities)
+        select *, '40' as group_id from zero_rows where boi_code in ('27', '28', '29', '35', '36', '37', '38', '39')
+    )
+    group by group_id
+),
+
+-- Rows 43, 44, 45 = asset minus liability gaps (row 24/25/26 minus row 40/41/42)
+-- Rows 43-45 reference computed values, so we resolve them after agg
+gap_rows as (
+    select
+        gap.boi_code,
+        assets.bucket_1  - liabilities.bucket_1  as bucket_1,
+        assets.bucket_2  - liabilities.bucket_2  as bucket_2,
+        assets.bucket_3  - liabilities.bucket_3  as bucket_3,
+        assets.bucket_4  - liabilities.bucket_4  as bucket_4,
+        assets.bucket_5  - liabilities.bucket_5  as bucket_5,
+        assets.bucket_6  - liabilities.bucket_6  as bucket_6,
+        assets.bucket_7  - liabilities.bucket_7  as bucket_7,
+        assets.bucket_8  - liabilities.bucket_8  as bucket_8,
+        assets.bucket_9  - liabilities.bucket_9  as bucket_9,
+        assets.bucket_10 - liabilities.bucket_10 as bucket_10,
+        assets.bucket_11 - liabilities.bucket_11 as bucket_11,
+        assets.bucket_12 - liabilities.bucket_12 as bucket_12,
+        assets.bucket_13 - liabilities.bucket_13 as bucket_13,
+        assets.bucket_14 - liabilities.bucket_14 as bucket_14,
+        assets.bucket_15 - liabilities.bucket_15 as bucket_15,
+        assets.bucket_16 - liabilities.bucket_16 as bucket_16
+    from (
+        values ('43', '24', '40'), ('44', '25', '41'), ('45', '26', '42')
+    ) as gap (boi_code, asset_code, liability_code)
+    inner join zero_rows assets on gap.asset_code = assets.boi_code
+    inner join zero_rows liabilities on gap.liability_code = liabilities.boi_code
+),
+
+-- Row 48 = row 43 minus (row 46 + row 47)
+row_48 as (
+    select
+        '48' as boi_code,
+        r43.bucket_1  - (r46.bucket_1  + r47.bucket_1)  as bucket_1,
+        r43.bucket_2  - (r46.bucket_2  + r47.bucket_2)  as bucket_2,
+        r43.bucket_3  - (r46.bucket_3  + r47.bucket_3)  as bucket_3,
+        r43.bucket_4  - (r46.bucket_4  + r47.bucket_4)  as bucket_4,
+        r43.bucket_5  - (r46.bucket_5  + r47.bucket_5)  as bucket_5,
+        r43.bucket_6  - (r46.bucket_6  + r47.bucket_6)  as bucket_6,
+        r43.bucket_7  - (r46.bucket_7  + r47.bucket_7)  as bucket_7,
+        r43.bucket_8  - (r46.bucket_8  + r47.bucket_8)  as bucket_8,
+        r43.bucket_9  - (r46.bucket_9  + r47.bucket_9)  as bucket_9,
+        r43.bucket_10 - (r46.bucket_10 + r47.bucket_10) as bucket_10,
+        r43.bucket_11 - (r46.bucket_11 + r47.bucket_11) as bucket_11,
+        r43.bucket_12 - (r46.bucket_12 + r47.bucket_12) as bucket_12,
+        r43.bucket_13 - (r46.bucket_13 + r47.bucket_13) as bucket_13,
+        r43.bucket_14 - (r46.bucket_14 + r47.bucket_14) as bucket_14,
+        r43.bucket_15 - (r46.bucket_15 + r47.bucket_15) as bucket_15,
+        r43.bucket_16 - (r46.bucket_16 + r47.bucket_16) as bucket_16
+    from gap_rows r43
+    cross join zero_rows r46
+    cross join zero_rows r47
+    where r43.boi_code = '43'
+    and r46.boi_code = '46'
+    and r47.boi_code = '47'
+)
+
+-- Final output: non-computed rows from zero_rows, computed rows from agg/gap/row_48
+select boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from zero_rows
+where boi_code not in ('14', '21', '24', '35', '40', '43', '44', '45', '48')
+
+union all
+
+select group_id as boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from agg
+
+union all
+
+select boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from gap_rows
+
+union all
+
+select boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from row_48
+
+order by boi_code::int

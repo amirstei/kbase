@@ -1,0 +1,1082 @@
+with report_context as (
+    -- Generate various date fields relative to the selected date and other context-related values
+    select
+        selected_date as report_date,
+        dateadd(day,1, report_date) as tomorrow,
+        dateadd(day,2, report_date) as two_days_from_now,
+        dateadd(day,3, report_date) as three_days_from_now,
+        dateadd(day,4, report_date) as four_days_from_now,
+        dateadd(day,5, report_date) as five_days_from_now,
+        dateadd(day,6, report_date) as six_days_from_now,
+        dateadd(day,7, report_date) as seven_days_from_now,
+        dateadd(day,14,report_date) as fourteen_days_from_now,
+        dateadd(day,21,report_date) as twenty_one_days_from_now,
+        dateadd(day,30,report_date) as thirty_days_from_now,
+        next_tax_day,
+        tax_day_of_month as tax_day_of_month,
+        date('2999-12-31') as infinity,
+        0                            as factor_boi_code_3,
+        1                            as factor_boi_code_3_pama
+    from lateral (
+        -- Find the next tax day after the selected date
+            select min(date_)  as next_tax_day
+            from {{ object_identifier('dwh/core/dim_dates') }}
+            where date_ >= selected_date and day_of_month = tax_day_of_month
+            )
+),
+
+-- Define coefficient matrix for deposit behavior analysis
+coefficient_matrix as (
+    select deposit_type, behavior_action, cust_1, cust_2, cust_3
+    from (
+        values
+        ('current_account',      'stays_in_current',       28.899, 22.500, 16.673),
+        ('current_account',      'opens_deposit_3_months', 20.007, 22.500, 25.565),
+        ('current_account',      'opens_deposit_1_year',   35.568, 43.900, 51.114),
+        ('current_account',      'abandon',                15.526, 11.100,  6.648),
+        ('three_months_deposit', 'stays_in_current',       34.344, 22.500, 16.000),
+        ('three_months_deposit', 'opens_deposit_3_months', 16.678, 25.290, 23.700),
+        ('three_months_deposit', 'opens_deposit_1_year',   29.845, 39.989, 54.955),
+        ('three_months_deposit', 'abandon',                17.728, 11.080,  4.432),
+        ('three_months_deposit', 'early_withdrawal',        1.405,  1.141,  0.913),
+        ('one_year_deposit',     'stays_in_current',       36.210, 21.940, 13.170),
+        ('one_year_deposit',     'opens_deposit_3_months', 14.920, 21.940, 22.600),
+        ('one_year_deposit',     'opens_deposit_1_year',   27.210, 43.890, 61.440),
+        ('one_year_deposit',     'abandon',                19.940, 11.080,  2.220),
+        ('one_year_deposit',     'early_withdrawal',        1.720,  1.150,  0.570)
+    ) as v1 (deposit_type, behavior_action, cust_1, cust_2, cust_3)
+),
+
+-- Fetch the balance of BOI code 9 from the previous month for a specific bank book number
+boi_9_balance_of_prev_month as (
+    select
+        balance as boi_9_balance_of_prev_month
+    from {{ object_identifier('dwh/fin/fact_bank_books_over_time') }}
+    where bank_book_number = 2500
+        and value_date = dateadd(day, -1, date_trunc('month',selected_date))  -- noqa: operators_whitespace
+),
+
+-- Fetch bank books data for the selected date
+bank_books as (
+    select
+        bank_book_number,
+        parent_bank_book_number,
+        balance
+    from {{ object_identifier('dwh/fin/fact_bank_books_over_time') }}
+    where value_date = selected_date
+),
+
+-- Get the current account balance for boi code 1 calculation
+boi_current_account as (
+    select
+        sum(coalesce(balance, 0)) as balance
+    from bank_books
+    where bank_book_number in (1000, 1001, 1008)
+),
+
+-- General query for fin_accounts
+fin_accounts as (
+    select
+        id,
+        financial_institution_id
+    from {{ object_identifier('dwh/fin/dim_fin_accounts') }}
+),
+
+-- General query for financial_institutions
+financial_institutions as (
+    select
+        id,
+        bank_code
+    from {{ object_identifier('dwh/core/dim_financial_institutions') }}
+),
+
+-- General query for dim_loans
+dim_loans as (
+    select
+        id,
+        created_at,
+        account_number,
+        credit_score,
+        closed_date,
+        start_date,
+        end_date
+    from {{ object_identifier('dwh/loans/dim_loans') }}
+),
+
+-- General query for dim_deposits
+dim_deposits as (
+    select
+        id,
+        start_date,
+        end_date,
+        principal_amount,
+        account_number,
+        account_id,
+        term_months,
+        close_date,
+        template_id,
+        is_active
+    from {{ object_identifier('dwh/deposits/dim_deposits') }}
+),
+
+-- Calculate total payment for financial deposits including interest up to close or end date
+fin_deposits as (
+    select
+        fin_account_id,
+        start_date,
+        close_date,
+        end_date,
+        term_type,
+        coalesce(close_date, end_date) as coalesce_end_date,
+        datediff(day, start_date, coalesce_end_date) as days_left,
+        principal_amount,
+        interest_rate,
+        principal_amount + principal_amount * (interest_rate / 365 / 100) * days_left as total_payment
+    from {{ object_identifier('dwh/fin/fact_fin_deposits') }}
+),
+
+-- Calculate BOI code 1 values based on daily financial deposits and current account balance
+-- In specification doc boi_1 has also sum of bank books balance, added in the pivotal step
+boi_1 as (
+    select
+        coalesce(sum(case when coalesce_end_date = tomorrow            then total_payment else 0 end), 0) as boi_1_day_1,
+        coalesce(sum(case when coalesce_end_date = two_days_from_now   then total_payment else 0 end), 0) as boi_1_day_2,
+        coalesce(sum(case when coalesce_end_date = three_days_from_now then total_payment else 0 end), 0) as boi_1_day_3,
+        coalesce(sum(case when coalesce_end_date = four_days_from_now  then total_payment else 0 end), 0) as boi_1_day_4,
+        coalesce(sum(case when coalesce_end_date = five_days_from_now  then total_payment else 0 end), 0) as boi_1_day_5,
+        coalesce(sum(case when coalesce_end_date = six_days_from_now   then total_payment else 0 end), 0) as boi_1_day_6,
+        coalesce(sum(case when coalesce_end_date = seven_days_from_now then total_payment else 0 end), 0) as boi_1_day_7,
+        coalesce(sum(
+            case when seven_days_from_now < coalesce_end_date      and coalesce_end_date <= fourteen_days_from_now   then total_payment else 0 end), 0) as boi_1_up_to_14_days,
+        coalesce(sum(
+            case when fourteen_days_from_now < coalesce_end_date   and coalesce_end_date <= twenty_one_days_from_now then total_payment else 0 end), 0) as boi_1_up_to_21_days,
+        coalesce(sum(
+            case when twenty_one_days_from_now < coalesce_end_date and coalesce_end_date <= thirty_days_from_now     then total_payment else 0 end), 0) as boi_1_up_to_30_days
+    from report_context, boi_current_account, fin_deposits
+    inner join fin_accounts
+    on fin_deposits.fin_account_id = fin_accounts.id
+    inner join financial_institutions
+    on fin_accounts.financial_institution_id = financial_institutions.id
+    where start_date <= report_context.report_date
+         and report_context.report_date < coalesce_end_date
+         and financial_institutions.bank_code = 99 -- israel bank
+         and fin_deposits.term_type = 1 -- daily
+),
+
+-- Determine BOI codes and values for specific bank codes from financial deposits
+boi_2 as (
+    select  *
+    from (
+        select
+            2 as boi_code,
+            'boi_code'          as boi_code_desc,
+            end_date            as calculation_date,
+            -- calculation_value is the principal + interest for the deposit in the end of deposit period
+            fin_deposits.principal_amount + coalesce(abs(datediff('day', fin_deposits.end_date,fin_deposits.start_date)) *
+                fin_deposits.principal_amount * (fin_deposits.interest_rate / 100) / 365 , 0) as calculation_value
+        from fin_deposits
+        inner join fin_accounts
+            on fin_deposits.fin_account_id = fin_accounts.id
+        inner join financial_institutions
+            on fin_accounts.financial_institution_id = financial_institutions.id
+        where start_date <= selected_date and selected_date < coalesce(close_date, (select infinity from report_context))
+           and financial_institutions.bank_code not in (3, 99)  -- ignore (99) bank of israel and (3) esh bank
+        ) inner_query
+    where boi_code = 2
+),
+
+-- Get loan status attribute for each loan as of the report date
+loan_status as (
+    select
+        loan_id,
+        attr_value::int as status
+    from {{ object_identifier('dwh/loans/dim_loans_attributes_scd') }}  attributes
+    where attr_name ilike 'status'
+        and attributes.created_date <= selected_date
+        and selected_date < attributes.expired_date
+    qualify row_number() over (partition by attributes.loan_id, attributes.created_date order by attributes.id desc) = 1
+),
+
+-- Active loans define as loans who value_date is between start_date and closed_at/end_date
+active_loans as (
+    select
+        dim_loans.id as loan_id,
+        dim_loans.account_number
+    from dim_loans
+    left join loan_status
+    on dim_loans.id = loan_status.loan_id
+    where loan_status.status != 9
+        and  (
+                case when dim_loans.closed_date is null
+                     then dim_loans.start_date <= selected_date and selected_date < coalesce(dim_loans.end_date, (select infinity from report_context))
+                     else dim_loans.start_date <= selected_date and selected_date < dim_loans.closed_date
+                end
+            )
+),
+
+-- Get the customer credit score for all loans
+customer_credit_score as (
+    select
+        customer_attributes.customer_id,
+        customer_attributes.attr_value::int as credit_score,
+        dim_accounts.account_number
+    from {{ object_identifier('dwh/customers/dim_customers_attributes_scd') }} customer_attributes
+    left join {{ object_identifier('dwh/accounts/dim_accounts') }} dim_accounts
+    on customer_attributes.customer_id = dim_accounts.customer_id
+    where customer_attributes.attr_name = 'credit_score'
+        and customer_attributes.created_date <= selected_date
+        and selected_date < coalesce(customer_attributes.expired_date,(select infinity from report_context))
+),
+
+-- Get the most updated credit score for account for all loans until the report date
+loans_most_updated_credit_score as (
+    select
+        dim_loans.account_number,
+        dim_loans.id,
+        dim_loans.start_date,
+        dim_loans.created_at,
+        dim_loans.credit_score
+    from dim_loans
+    where
+        dim_loans.start_date <= selected_date
+        and dim_loans.start_date is not null
+        and dim_loans.start_date <= selected_date
+    qualify row_number() over (partition by dim_loans.account_number order by dim_loans.created_at desc) = 1
+),
+
+-- Get the report_date credit_loss attribute, when selected date is lower then the first value created_date it display the first value
+credit_loss_allowance_percent_attribute as (
+    select
+        env_attributes.attr_name,
+        try_parse_json(env_attributes.attr_value) as value
+    from {{ object_identifier('dwh/loans/dim_loans_env_attributes_scd') }} env_attributes
+    where
+        env_attributes.attr_name ilike '%credit_loss_allowance_percent%'
+        and case when attr_old_value is null then '2000-01-01'::date else env_attributes.created_date end <= selected_date
+    qualify row_number() over (partition by env_attributes.attr_name order by env_attributes.created_date desc, env_attributes.id desc) = 1
+),
+
+-- Join default attribute template value with relevant attribute to display default if no attribute in the selected report_date
+credit_loss_allowance_default_join_attribute as (
+    select
+        scores_arr.value::number(27, 9)  as score,
+        percent_arr.value::number(27, 9) as percent
+    from (
+            select
+                coalesce(credit_loss_allowance_percent_attribute.value, try_parse_json(attributes_templates.data_schema):default) as credit_loss_allowance_percent
+            from report_context, {{ object_identifier('dwh/loans/dim_loans_attributes_templates') }} attributes_templates
+            left join credit_loss_allowance_percent_attribute
+            on attributes_templates.name =  credit_loss_allowance_percent_attribute.attr_name
+            where attributes_templates.name ilike '%credit_loss_allowance_percent%'
+        ),
+    table(flatten(input => credit_loss_allowance_percent, path => 'scores'))  scores_arr,
+    table(flatten(input => credit_loss_allowance_percent, path => 'percent')) percent_arr
+    where scores_arr.index = percent_arr.index
+),
+
+-- When deprecated was made in the created_at date we want to take the most updated schedule
+repayments_schedule as (
+    select loans_repayments.*
+    from  {{ object_identifier('dwh/loans/fact_loans_repayments_schedule') }} loans_repayments
+    cross join report_context
+    where loans_repayments.created_at::date <= report_context.report_date
+        and report_context.report_date < coalesce(loans_repayments.deprecated_at::date,report_context.infinity)
+        and loans_repayments.payment_date between report_context.tomorrow and report_context.thirty_days_from_now
+    -- There is an option of next 2 payments, for example when run the report on 'yyyy-01-31', qualify keep the closest
+    qualify row_number() over (partition by loans_repayments.loan_id order by loans_repayments.payment_date) = 1
+),
+
+-- Code 3 including private active loans in the selected date range
+boi_3 as (
+    select
+        3                                                                   as boi_code,
+        'boi_code'                                                          as boi_code_desc,
+        repayments_schedule.payment_date                                    as payment_date,
+        repayments_schedule.payment * (1 - (credit_loss.percent / 100))     as total_payment_net
+    from active_loans
+    inner join repayments_schedule
+    on active_loans.loan_id = repayments_schedule.loan_id
+    left join customer_credit_score
+    on active_loans.account_number = customer_credit_score.account_number
+    left join loans_most_updated_credit_score loan_credit_score
+    on active_loans.account_number = loan_credit_score.account_number
+    left join credit_loss_allowance_default_join_attribute credit_loss
+    on floor(coalesce(customer_credit_score.credit_score,loan_credit_score.credit_score), -1) = credit_loss.score  -- noqa: operators_whitespace
+
+    -- There some cases that no loans in boi_3 and we need the code to join the statement of balance, the union all make sure we will have at least 1 row
+    union all
+    select
+        3 as boi_code,
+        'boi_code' as boi_code_desc,
+        '9999-01-01' as payment_date,
+        0 as total_payment_net
+),
+
+-- Get the credit_loss_provision attribute value for the report date
+credit_loss_provision_attr as (
+    select
+        1 - ( case when attr_value = '' then 0 else attribute.attr_value::float end / 100 ) as credit_loss_provision
+    from {{ object_identifier('dwh/fin/dim_fin_env_attributes_scd') }} attribute
+    where attribute.attr_name like 'credit_loss_provision'
+        and selected_date >= attribute.created_date
+        and selected_date < coalesce(attribute.expired_date, sysdate())
+),
+
+-- Pama report - get the relevant principal and interest amounts from the repayments schedule for Pama portfolio
+boi_3_pama as (
+    select
+        3                   as boi_code,
+        'pama'              as boi_code_desc,
+        payment_date,
+        (loans_payments.principal_amount + loans_payments.interest_amount) * credit_loss_provision_attr.credit_loss_provision as total_amount
+    from  {{ object_identifier('dwh/loans/fact_loans_portfolios_repayments_schedule') }} loans_payments
+    cross join credit_loss_provision_attr
+    where
+        loans_payments.portfolios_name ilike 'pama'
+        and selected_date < coalesce(loans_payments.deprecated_at::date, ( select infinity from report_context))
+        and loans_payments.created_at::date <= selected_date
+),
+
+-- Get the last interest transaction for each deposit up to the selected date. Action = 5 indicates interest transactions, calculated in the end of day
+last_interest_transaction as (
+    select
+        deposit_id,
+        id              as transaction_id,
+        amount          as transaction_amount,
+        balance_fund,
+        balance_interest,
+        value_date
+    from {{ object_identifier('dwh/deposits/fact_deposits_transactions') }}
+    where value_date <= selected_date and action = 5 -- interest
+    qualify row_number() over(partition by deposit_id order by value_date desc, id desc) = 1
+),
+
+-- Compute BOI code 9 values based on bank book data
+boi_9 as (
+    select
+        9                                                                       as boi_code,
+        'boi_code'                                                              as boi_code_desc,
+        next_tax_day                                                            as calculation_date,
+        case when dayofmonth(report_context.report_date) < tax_day_of_month
+             then boi_9_balance_of_prev_month
+             else balance end                                                   as calculation_value
+    from bank_books, report_context,boi_9_balance_of_prev_month
+    where bank_book_number = 2500
+),
+
+-- Aggregate all BOI codes 1, 2, 3, 6, and 9 by various time ranges
+final_base_boi as (
+    select
+        boi_code,
+        boi_code_desc,
+        sum(case when calculation_date = tomorrow                       then calculation_value else 0 end) as day_1,
+        sum(case when calculation_date = two_days_from_now              then calculation_value else 0 end) as day_2,
+        sum(case when calculation_date = three_days_from_now            then calculation_value else 0 end) as day_3,
+        sum(case when calculation_date = four_days_from_now             then calculation_value else 0 end) as day_4,
+        sum(case when calculation_date = five_days_from_now             then calculation_value else 0 end) as day_5,
+        sum(case when calculation_date = six_days_from_now              then calculation_value else 0 end) as day_6,
+        sum(case when calculation_date = seven_days_from_now            then calculation_value else 0 end) as day_7,
+        sum(case when seven_days_from_now < calculation_date
+                      and calculation_date <= fourteen_days_from_now    then calculation_value else 0 end) as up_to_14_days,
+        sum(case when fourteen_days_from_now < calculation_date
+                      and calculation_date <= twenty_one_days_from_now  then calculation_value else 0 end) as up_to_21_days,
+        sum(case when twenty_one_days_from_now < calculation_date
+                      and calculation_date <= thirty_days_from_now      then calculation_value else 0 end) as up_to_30_days
+    from (
+        select *
+        from boi_2
+        union all
+        select *
+        from boi_3
+        union all
+        select *
+        from boi_3_pama
+        union all
+        select *
+        from boi_9
+        ) union_ctes
+    cross join report_context
+    group by boi_code, boi_code_desc
+),
+
+-- Aggregate balances for specific bank book numbers and map to BOI codes
+add_bank_books as (
+    select *
+    from (
+        select
+            case when bank_book_number in (1000, 1001, 1008) then 1
+                 when bank_book_number in (1200, 1201, 1202) then 2
+                 when bank_book_number = 1241 then 4
+                 else -1  -- noqa: operators_whitespace
+            end as boi_code,
+            'boi_code'      as boi_code_desc,
+            sum(balance)    as balance
+        from bank_books
+        group by 1
+        ) inner_agg
+    where boi_code != -1  -- noqa: operators_whitespace
+),
+
+-- Combine future expected cash data with aggregated bank book balances
+future_expected_cash as (
+    select
+        final_base_boi.boi_code,
+        final_base_boi.boi_code_desc,
+        coalesce(day_1, 0) + coalesce(add_bank_books.balance, 0)    as day_1,
+        coalesce(day_2, 0)                                          as day_2,
+        coalesce(day_3, 0)                                          as day_3,
+        coalesce(day_4, 0)                                          as day_4,
+        coalesce(day_5, 0)                                          as day_5,
+        coalesce(day_6, 0)                                          as day_6,
+        coalesce(day_7, 0)                                          as day_7,
+        coalesce(up_to_14_days, 0)                                  as up_to_14_days,
+        coalesce(up_to_21_days, 0)                                  as up_to_21_days,
+        coalesce(up_to_30_days, 0)                                  as up_to_30_days
+    from final_base_boi
+    left join add_bank_books
+    on final_base_boi.boi_code = add_bank_books.boi_code
+    order by boi_code
+),
+
+-- Aggregate balance data from bank books by different BOI codes.
+-- note: using union all instead of case due to conditions (bank books) overlapping
+balance as (
+    select
+        1               as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when bank_book_number between 1001 and 1008
+        or bank_book_number between 1015 and 1016 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        2               as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when bank_book_number between 1200 and 1211 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        3               as boi_code,
+        'boi_code'      as boi_code_desc,
+        -- FYI- parent_bank_book_number is used here
+        sum( case when parent_bank_book_number between 1300 and 1399 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        4               as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when bank_book_number between 1000 and 1350 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        6               as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when parent_bank_book_number between 2100 and 2199
+        and bank_book_number not between 2018 and 2039 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        9               as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when bank_book_number = 2500 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+    union all
+    select
+        10              as boi_code,
+        'boi_code'      as boi_code_desc,
+        sum( case when bank_book_number between 2000 and 2500 then balance else 0 end )    as statement_of_balance
+    from bank_books
+
+),
+
+-- Aggregate all BOI codes and merge with expected cash balance data.
+boi_expected_cash_balance as (
+    select
+        future_expected_cash.boi_code,
+        future_expected_cash.boi_code_desc,
+        sum(day_1)                              as day_1,
+        sum(day_2)                              as day_2,
+        sum(day_3)                              as day_3,
+        sum(day_4)                              as day_4,
+        sum(day_5)                              as day_5,
+        sum(day_6)                              as day_6,
+        sum(day_7)                              as day_7,
+        sum(up_to_14_days)                      as up_to_14_days,
+        sum(up_to_21_days)                      as up_to_21_days,
+        sum(up_to_30_days)                      as up_to_30_days,
+        sum(coalesce(statement_of_balance, 0))  as statement_of_balance
+    from future_expected_cash
+    left join balance
+    -- future_expected_cash.boi_code_desc = balance.boi_code_desc make sure statement_of_balance wont double when sum per boi_code. only boi_code get the value
+    on (future_expected_cash.boi_code = balance.boi_code and future_expected_cash.boi_code_desc = balance.boi_code_desc)
+    group by future_expected_cash.boi_code, future_expected_cash.boi_code_desc
+
+),
+
+-- This code is used to generate a list of boi_code values from 1 to 12.It helps in ensuring
+-- that we have a complete dataset with boi_code values in this range,initializing all other fields to 0.
+-- This is useful for filling in missing data with default values when there is no existing data for some boi_code.
+zero_initialized_data as (
+    select *
+    from (values
+        (1, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (2, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (3, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (4, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (5, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (6, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (7, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (8, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (9, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (10, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (11, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (12, 'boi_code', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        )
+            init_zeros (boi_code, boi_code_desc, day_1, day_2, day_3, day_4, day_5, day_6, day_7, up_to_14_days, up_to_21_days, up_to_30_days, statement_of_balance)
+),
+
+-- Combine actual BOI data with zero-initialized data to ensure completeness.
+complete_boi_data as (
+    select *
+    from boi_expected_cash_balance
+
+    union all
+
+    select zero_initialized_data.*
+    from zero_initialized_data
+    left join boi_expected_cash_balance
+    on zero_initialized_data.boi_code = boi_expected_cash_balance.boi_code
+    where boi_expected_cash_balance.boi_code is null
+),
+
+final as (
+select
+    boi_code,
+    boi_code_desc,
+    day_1::number(27, 9)                      as day_1,
+    day_2::number(27, 9)                      as day_2,
+    day_3::number(27, 9)                      as day_3,
+    day_4::number(27, 9)                      as day_4,
+    day_5::number(27, 9)                      as day_5,
+    day_6::number(27, 9)                      as day_6,
+    day_7::number(27, 9)                      as day_7,
+    up_to_14_days::number(27, 9)              as up_to_14_days,
+    up_to_21_days::number(27, 9)              as up_to_21_days,
+    up_to_30_days::number(27, 9)              as up_to_30_days,
+    statement_of_balance::number(27, 9)       as statement_of_balance
+from complete_boi_data
+),
+
+-- Calculate the final report values for BOI codes 2, 3, 5, 7, 9 with specific adjustments for BOI code 3.
+-- Statement of balance for codes 1 and 6 define in the next steps
+code_2_calculation as (
+    select
+        sum(case when boi_code = 2 then day_1 else null end)                as boi_2_day_1,
+        sum(case when boi_code = 2 then day_2 else null end)                as boi_2_day_2,
+        sum(case when boi_code = 2 then day_3 else null end)                as boi_2_day_3,
+        sum(case when boi_code = 2 then day_4 else null end)                as boi_2_day_4,
+        sum(case when boi_code = 2 then day_5 else null end)                as boi_2_day_5,
+        sum(case when boi_code = 2 then day_6 else null end)                as boi_2_day_6,
+        sum(case when boi_code = 2 then day_7 else null end)                as boi_2_day_7,
+        sum(case when boi_code = 2 then up_to_14_days else null end)        as boi_2_up_to_14_days,
+        sum(case when boi_code = 2 then up_to_21_days else null end)        as boi_2_up_to_21_days,
+        sum(case when boi_code = 2 then up_to_30_days else null end)        as boi_2_up_to_30_days,
+        sum(case when boi_code = 2 then statement_of_balance else null end) as boi_2_statement_of_balance
+    from final
+),
+
+-- boi_3 calculation
+code_3_calculation as(
+    select
+        sum(case when boi_code = 3 then day_1 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_1,
+        sum(case when boi_code = 3 then day_2 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_2,
+        sum(case when boi_code = 3 then day_3 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_3,
+        sum(case when boi_code = 3 then day_4 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_4,
+        sum(case when boi_code = 3 then day_5 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_5,
+        sum(case when boi_code = 3 then day_6 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_6,
+        sum(case when boi_code = 3 then day_7 *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_day_7,
+        sum(case when boi_code = 3 then up_to_14_days *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_up_to_14_days,
+        sum(case when boi_code = 3 then up_to_21_days *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_up_to_21_days,
+        sum(case when boi_code = 3 then up_to_30_days *
+            (case when boi_code_desc = 'pama' then factor_boi_code_3_pama else factor_boi_code_3 end) else null end) as boi_3_up_to_30_days,
+        sum(case when boi_code = 3 then statement_of_balance else null end) as boi_3_statement_of_balance
+    from report_context, final
+),
+
+-- boi_5 calculation
+code_5_calculation as (
+    select
+        sum(case when boi_code = 5 then day_1 else null end)                as boi_5_day_1,
+        sum(case when boi_code = 5 then day_2 else null end)                as boi_5_day_2,
+        sum(case when boi_code = 5 then day_3 else null end)                as boi_5_day_3,
+        sum(case when boi_code = 5 then day_4 else null end)                as boi_5_day_4,
+        sum(case when boi_code = 5 then day_5 else null end)                as boi_5_day_5,
+        sum(case when boi_code = 5 then day_6 else null end)                as boi_5_day_6,
+        sum(case when boi_code = 5 then day_7 else null end)                as boi_5_day_7,
+        sum(case when boi_code = 5 then up_to_14_days else null end)        as boi_5_up_to_14_days,
+        sum(case when boi_code = 5 then up_to_21_days else null end)        as boi_5_up_to_21_days,
+        sum(case when boi_code = 5 then up_to_30_days else null end)        as boi_5_up_to_30_days,
+        sum(case when boi_code = 5 then statement_of_balance else null end) as boi_5_statement_of_balance
+    from final
+),
+
+-- boi_7 calculation
+code_7_calculation as (
+    select
+        sum(case when boi_code = 7 then day_1 else null end)                as boi_7_day_1,
+        sum(case when boi_code = 7 then day_2 else null end)                as boi_7_day_2,
+        sum(case when boi_code = 7 then day_3 else null end)                as boi_7_day_3,
+        sum(case when boi_code = 7 then day_4 else null end)                as boi_7_day_4,
+        sum(case when boi_code = 7 then day_5 else null end)                as boi_7_day_5,
+        sum(case when boi_code = 7 then day_6 else null end)                as boi_7_day_6,
+        sum(case when boi_code = 7 then day_7 else null end)                as boi_7_day_7,
+        sum(case when boi_code = 7 then up_to_14_days else null end)        as boi_7_up_to_14_days,
+        sum(case when boi_code = 7 then up_to_21_days else null end)        as boi_7_up_to_21_days,
+        sum(case when boi_code = 7 then up_to_30_days else null end)        as boi_7_up_to_30_days,
+        sum(case when boi_code = 7 then statement_of_balance else null end) as boi_7_statement_of_balance
+    from final
+),
+
+-- boi_9 calculation
+code_9_calculation as (
+    select
+        sum(case when boi_code = 9 then day_1 else null end)                as boi_9_day_1,
+        sum(case when boi_code = 9 then day_2 else null end)                as boi_9_day_2,
+        sum(case when boi_code = 9 then day_3 else null end)                as boi_9_day_3,
+        sum(case when boi_code = 9 then day_4 else null end)                as boi_9_day_4,
+        sum(case when boi_code = 9 then day_5 else null end)                as boi_9_day_5,
+        sum(case when boi_code = 9 then day_6 else null end)                as boi_9_day_6,
+        sum(case when boi_code = 9 then day_7 else null end)                as boi_9_day_7,
+        sum(case when boi_code = 9 then up_to_14_days else null end)        as boi_9_up_to_14_days,
+        sum(case when boi_code = 9 then up_to_21_days else null end)        as boi_9_up_to_21_days,
+        sum(case when boi_code = 9 then up_to_30_days else null end)        as boi_9_up_to_30_days,
+        sum(case when boi_code = 9 then statement_of_balance else null end) as boi_9_statement_of_balance
+    from final
+    ),
+
+-- Get customer loyalty scores as of the selected date.
+loyalty as (
+    select
+        customer_id,
+        loyalty_bucket,
+        loyalty_score
+    from table({{ object_identifier('datasets/customers/function_loyalty_score') }}(selected_date))
+),
+
+-- Get liquidity deposit balances and total payments as of the selected date.
+liquidity_deposits as (
+    select
+        deposit_id,
+        customer_id,
+        balance,
+        total_payment
+    from table({{ object_identifier('datasets/fin/function_liquidity_deposits') }}(selected_date))
+),
+
+-- Get deposits population for boi_6 calculation
+deposits_balance as (
+    select
+        liquidity_deposits.customer_id,
+        deps.account_number,
+        deps.account_id,
+        deps.id          as deposit_id,
+        deps.term_months as deposit_term,
+        case when deps.term_months = 0  then 'current_account' -- term_month = 0 include seizures
+             when deps.term_months = 3  then 'three_months_deposit'
+             when deps.term_months = 12 then 'one_year_deposit'
+             else null
+             end as deposit_type,
+        deps.end_date,
+        deps.close_date,
+        case when value_date <= coalesce(deps.close_date, deps.end_date)
+             then deps.end_date
+             else coalesce(deps.close_date, deps.end_date)
+             end as coalesce_end_date,
+        loyalty.loyalty_bucket,
+        transaction_id,
+        balance_fund,
+        balance_interest,
+        last_interest_transaction.value_date ,
+        principal_amount                 as original_amount,
+        liquidity_deposits.balance       as total_balance,
+        liquidity_deposits.total_payment as total_payment,
+        deps.is_active,
+        deps.start_date
+    from dim_deposits deps
+    inner join last_interest_transaction
+    on deps.id = last_interest_transaction.deposit_id
+    inner join liquidity_deposits
+    on deps.id = liquidity_deposits.deposit_id
+    left join loyalty
+    on liquidity_deposits.customer_id = loyalty.customer_id
+    cross join report_context
+),
+
+-- Calculate weighted balances for early withdrawals from deposits.
+early_withdraw as (
+     select
+        coalesce(sum(weighted_balance_1), 0) as weighted_balance_1,
+        coalesce(sum(weighted_balance_2), 0) as weighted_balance_2,
+        coalesce(sum(weighted_balance_3), 0) as weighted_balance_3
+     from (
+        select
+            deposits_balance.*,
+            case when loyalty_bucket = 1 then total_balance * (cust_1 / 100) else 0 end as weighted_balance_1,
+            case when loyalty_bucket = 2 then total_balance * (cust_2 / 100) else 0 end as weighted_balance_2,
+            case when loyalty_bucket = 3 then total_balance * (cust_3 / 100) else 0 end as weighted_balance_3
+        from deposits_balance
+        left join coefficient_matrix
+        on deposits_balance.deposit_type = coefficient_matrix.deposit_type
+        where deposit_term in (3, 12) and
+            (is_active = 1 or deposits_balance.value_date < close_date) and
+            coalesce_end_date >= deposits_balance.value_date + 1 and
+            coefficient_matrix.deposit_type in ('one_year_deposit', 'three_months_deposit') and
+            coefficient_matrix.behavior_action = 'early_withdrawal'
+    )
+),
+
+-- Calculate weighted balances for current accounts. Including seizures as current accounts
+current_accounts as (
+    select
+        coalesce(sum(weighted_balance_1), 0) as weighted_balance_1,
+        coalesce(sum(weighted_balance_2), 0) as weighted_balance_2,
+        coalesce(sum(weighted_balance_3), 0) as weighted_balance_3
+     from (
+        select distinct
+            deposits_balance.*,
+            sum(cust_1) over (partition by customer_id, deposit_id) as sum_private_customer_1,
+            sum(cust_2) over (partition by customer_id, deposit_id) as sum_private_customer_2,
+            sum(cust_3) over (partition by customer_id, deposit_id) as sum_private_customer_3,
+            case when loyalty_bucket = 1 then total_balance * (sum_private_customer_1 / 100) else 0 end as weighted_balance_1,
+            case when loyalty_bucket = 2 then total_balance * (sum_private_customer_2 / 100) else 0 end as weighted_balance_2,
+            case when loyalty_bucket = 3 then total_balance * (sum_private_customer_3 / 100) else 0 end as weighted_balance_3
+        from deposits_balance
+        left join coefficient_matrix
+        on deposits_balance.deposit_type = coefficient_matrix.deposit_type
+        where deposit_term in (0)
+              and coefficient_matrix.deposit_type in ('current_account')
+              and coefficient_matrix.behavior_action in ('abandon', 'stays_in_current')
+    )
+),
+
+-- Calculate weighted balances for deposits ending the next day.
+one_day_end_date as (
+    select
+        coalesce(sum(weighted_balance_1), 0) as weighted_balance_1,
+        coalesce(sum(weighted_balance_2), 0) as weighted_balance_2,
+        coalesce(sum(weighted_balance_3), 0) as weighted_balance_3
+     from (
+            select distinct
+                deposits_balance.*,
+                sum(cust_1) over (partition by customer_id, deposit_id) as sum_private_customer_1,
+                sum(cust_2) over (partition by customer_id, deposit_id) as sum_private_customer_2,
+                sum(cust_3) over (partition by customer_id, deposit_id) as sum_private_customer_3,
+                case when loyalty_bucket = 1 then total_payment * (sum_private_customer_1 / 100) else 0 end as weighted_balance_1,
+                case when loyalty_bucket = 2 then total_payment * (sum_private_customer_2 / 100) else 0 end as weighted_balance_2,
+                case when loyalty_bucket = 3 then total_payment * (sum_private_customer_3 / 100) else 0 end as weighted_balance_3
+            from deposits_balance
+            left join coefficient_matrix
+            on deposits_balance.deposit_type = coefficient_matrix.deposit_type
+            where deposit_term in (3, 12) and
+                  coalesce_end_date = deposits_balance.value_date + 1 and
+                  coefficient_matrix.deposit_type    in ('one_year_deposit', 'three_months_deposit') and
+                  coefficient_matrix.behavior_action in ('abandon', 'stays_in_current')
+    )
+),
+
+-- Aggregate BOI 6 day 1 balances from various components.
+boi_6_day_1_agg as (
+    select
+        early_withdraw.weighted_balance_1   + early_withdraw.weighted_balance_2   + early_withdraw.weighted_balance_3 +
+        current_accounts.weighted_balance_1 + current_accounts.weighted_balance_2 + current_accounts.weighted_balance_3 +
+        one_day_end_date.weighted_balance_1 + one_day_end_date.weighted_balance_2 + one_day_end_date.weighted_balance_3
+        as boi_6_day_1
+    from early_withdraw, current_accounts, one_day_end_date
+),
+
+-- Calculate estimated balances for BOI 6 for days 2 to 7 and up to 30 days.
+boi_6_other_buckets as (
+    select distinct
+        deposits_balance.*,
+        case when coalesce_end_date = two_days_from_now   then total_payment else 0 end as day2_estimate_balance,
+        case when coalesce_end_date = three_days_from_now then total_payment else 0 end as day3_estimate_balance,
+        case when coalesce_end_date = four_days_from_now  then total_payment else 0 end as day4_estimate_balance,
+        case when coalesce_end_date = five_days_from_now  then total_payment else 0 end as day5_estimate_balance,
+        case when coalesce_end_date = six_days_from_now   then total_payment else 0 end as day6_estimate_balance,
+        case when coalesce_end_date = seven_days_from_now then total_payment else 0 end as day7_estimate_balance,
+        case when coalesce_end_date > seven_days_from_now      and coalesce_end_date <= fourteen_days_from_now   then total_payment else 0 end as up_to_14_days_estimate_balance,
+        case when coalesce_end_date > fourteen_days_from_now   and coalesce_end_date <= twenty_one_days_from_now then total_payment else 0 end as up_to_21_days_estimate_balance,
+        case when coalesce_end_date > twenty_one_days_from_now and coalesce_end_date <= thirty_days_from_now     then total_payment else 0 end as up_to_30_days_estimate_balance,
+        sum(cust_1) over (partition by customer_id, deposit_id) as sum_private_customer_1,
+        sum(cust_2) over (partition by customer_id, deposit_id) as sum_private_customer_2,
+        sum(cust_3) over (partition by customer_id, deposit_id) as sum_private_customer_3
+    from report_context, deposits_balance
+    left join coefficient_matrix
+    on deposits_balance.deposit_type = coefficient_matrix.deposit_type
+    where deposit_term in (3, 12) and
+          (is_active = 1 or deposits_balance.value_date < close_date) and
+          coefficient_matrix.deposit_type    in ('one_year_deposit', 'three_months_deposit') and
+          coefficient_matrix.behavior_action in ('abandon', 'stays_in_current')
+),
+
+-- Aggregate BOI 6 estimated balances for days 2 to 7 and up to 30 days.
+boi_6_other_buckets_agg as (
+    select
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day2_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day2_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day2_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0)  as boi_6_day_2,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day3_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day3_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day3_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_day_3,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day4_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day4_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day4_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_day_4,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day5_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day5_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day5_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_day_5,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day6_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day6_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day6_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_day_6,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then day7_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then day7_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then day7_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_day_7,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then up_to_14_days_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then up_to_14_days_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then up_to_14_days_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_up_to_14_days,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then up_to_21_days_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then up_to_21_days_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then up_to_21_days_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_up_to_21_days,
+        coalesce(sum(
+            case when loyalty_bucket = 1 then up_to_30_days_estimate_balance * (sum_private_customer_1 / 100)
+                 when loyalty_bucket = 2 then up_to_30_days_estimate_balance * (sum_private_customer_2 / 100)
+                 when loyalty_bucket = 3 then up_to_30_days_estimate_balance * (sum_private_customer_3 / 100) else 0 end), 0) as boi_6_up_to_30_days
+    from boi_6_other_buckets
+),
+
+statement_of_balance_boi_1_6 as (
+    select
+        sum(case when boi_code = 1 then statement_of_balance else 0 end) as boi_1_statement_of_balance,
+        sum(case when boi_code = 6 then statement_of_balance else 0 end) as boi_6_statement_of_balance
+    from balance
+    where boi_code in (1,6)
+) ,
+
+-- Combine BOI 6 day 1 with other estimated balances.
+pivoted_1 as (
+    select
+        round(coalesce(boi_1_day_1, 0), 0) + boi_current_account.balance    as boi_1_day_1,
+        round(boi_1_day_2, 0)                                               as boi_1_day_2,
+        round(boi_1_day_3, 0)                                               as boi_1_day_3,
+        round(boi_1_day_4, 0)                                               as boi_1_day_4,
+        round(boi_1_day_5, 0)                                               as boi_1_day_5,
+        round(boi_1_day_6, 0)                                               as boi_1_day_6,
+        round(boi_1_day_7, 0)                                               as boi_1_day_7,
+        round(boi_1_up_to_14_days, 0)                                       as boi_1_up_to_14_days,
+        round(boi_1_up_to_21_days, 0)                                       as boi_1_up_to_21_days,
+        round(boi_1_up_to_30_days, 0)                                       as boi_1_up_to_30_days,
+        boi_1_statement_of_balance                                          as boi_1_statement_of_balance
+    from boi_1
+    cross join boi_current_account
+    cross join statement_of_balance_boi_1_6
+),
+
+-- boi_4 summarizes
+pivoted_4 as (
+    select
+        coalesce(boi_1_day_1, 0) + coalesce(boi_2_day_1, 0) + coalesce(boi_3_day_1, 0)                          as boi_4_day_1,
+        coalesce(boi_1_day_2, 0) + coalesce(boi_2_day_2, 0) + coalesce(boi_3_day_2, 0)                          as boi_4_day_2,
+        coalesce(boi_1_day_3, 0) + coalesce(boi_2_day_3, 0) + coalesce(boi_3_day_3, 0)                          as boi_4_day_3,
+        coalesce(boi_1_day_4, 0) + coalesce(boi_2_day_4, 0) + coalesce(boi_3_day_4, 0)                          as boi_4_day_4,
+        coalesce(boi_1_day_5, 0) + coalesce(boi_2_day_5, 0) + coalesce(boi_3_day_5, 0)                          as boi_4_day_5,
+        coalesce(boi_1_day_6, 0) + coalesce(boi_2_day_6, 0) + coalesce(boi_3_day_6, 0)                          as boi_4_day_6,
+        coalesce(boi_1_day_7, 0) + coalesce(boi_2_day_7, 0) + coalesce(boi_3_day_7, 0)                          as boi_4_day_7,
+        coalesce(boi_1_up_to_14_days, 0) + coalesce(boi_2_up_to_14_days, 0) + coalesce(boi_3_up_to_14_days, 0)  as boi_4_up_to_14_days,
+        coalesce(boi_1_up_to_21_days, 0) + coalesce(boi_2_up_to_21_days, 0) + coalesce(boi_3_up_to_21_days, 0)  as boi_4_up_to_21_days,
+        coalesce(boi_1_up_to_30_days, 0) + coalesce(boi_2_up_to_30_days, 0) + coalesce(boi_3_up_to_30_days, 0)  as boi_4_up_to_30_days,
+        coalesce(boi_1_statement_of_balance, 0) + coalesce(boi_2_statement_of_balance, 0) + coalesce(boi_3_statement_of_balance, 0) as boi_4_statement_of_balance
+    from pivoted_1, code_2_calculation,code_3_calculation
+),
+
+pivoted_6 as (
+    select
+        boi_6_day_1,
+        boi_6_day_2,
+        boi_6_day_3,
+        boi_6_day_4,
+        boi_6_day_5,
+        boi_6_day_6,
+        boi_6_day_7,
+        boi_6_up_to_14_days,
+        boi_6_up_to_21_days,
+        boi_6_up_to_30_days,
+        boi_6_statement_of_balance
+    from boi_6_day_1_agg, boi_6_other_buckets_agg,statement_of_balance_boi_1_6
+),
+
+
+pivoted_8 as (
+    select
+        boi_6_day_1                 as boi_8_day_1,
+        boi_6_day_2                 as boi_8_day_2,
+        boi_6_day_3                 as boi_8_day_3,
+        boi_6_day_4                 as boi_8_day_4,
+        boi_6_day_5                 as boi_8_day_5,
+        boi_6_day_6                 as boi_8_day_6,
+        boi_6_day_7                 as boi_8_day_7,
+        boi_6_up_to_14_days         as boi_8_up_to_14_days,
+        boi_6_up_to_21_days         as boi_8_up_to_21_days,
+        boi_6_up_to_30_days         as boi_8_up_to_30_days,
+        boi_6_statement_of_balance  as boi_8_statement_of_balance
+    from pivoted_6
+),
+
+pivoted_10 as (
+    select
+        coalesce(boi_6_day_1, 0) + coalesce(boi_9_day_1, 0)                                 as boi_10_day_1,
+        coalesce(boi_6_day_2, 0) + coalesce(boi_9_day_2, 0)                                 as boi_10_day_2,
+        coalesce(boi_6_day_3, 0) + coalesce(boi_9_day_3, 0)                                 as boi_10_day_3,
+        coalesce(boi_6_day_4, 0) + coalesce(boi_9_day_4, 0)                                 as boi_10_day_4,
+        coalesce(boi_6_day_5, 0) + coalesce(boi_9_day_5, 0)                                 as boi_10_day_5,
+        coalesce(boi_6_day_6, 0) + coalesce(boi_9_day_6, 0)                                 as boi_10_day_6,
+        coalesce(boi_6_day_7, 0) + coalesce(boi_9_day_7, 0)                                 as boi_10_day_7,
+        coalesce(boi_6_up_to_14_days, 0) + coalesce(boi_9_up_to_14_days, 0)                 as boi_10_up_to_14_days,
+        coalesce(boi_6_up_to_21_days, 0) + coalesce(boi_9_up_to_21_days, 0)                 as boi_10_up_to_21_days,
+        coalesce(boi_6_up_to_30_days, 0) + coalesce(boi_9_up_to_30_days, 0)                 as boi_10_up_to_30_days,
+        coalesce(boi_6_statement_of_balance, 0) + coalesce(boi_9_statement_of_balance, 0)   as boi_10_statement_of_balance
+    from pivoted_6, code_9_calculation
+),
+
+pivoted_11 as (
+    select
+        coalesce(boi_4_day_1, 0) - coalesce(boi_10_day_1, 0)                                as boi_11_day_1,
+        coalesce(boi_4_day_2, 0) - coalesce(boi_10_day_2, 0)                                as boi_11_day_2,
+        coalesce(boi_4_day_3, 0) - coalesce(boi_10_day_3, 0)                                as boi_11_day_3,
+        coalesce(boi_4_day_4, 0) - coalesce(boi_10_day_4, 0)                                as boi_11_day_4,
+        coalesce(boi_4_day_5, 0) - coalesce(boi_10_day_5, 0)                                as boi_11_day_5,
+        coalesce(boi_4_day_6, 0) - coalesce(boi_10_day_6, 0)                                as boi_11_day_6,
+        coalesce(boi_4_day_7, 0) - coalesce(boi_10_day_7, 0)                                as boi_11_day_7,
+        coalesce(boi_4_up_to_14_days, 0) - coalesce(boi_10_up_to_14_days, 0)                as boi_11_up_to_14_days,
+        coalesce(boi_4_up_to_21_days, 0) - coalesce(boi_10_up_to_21_days, 0)                as boi_11_up_to_21_days,
+        coalesce(boi_4_up_to_30_days, 0) - coalesce(boi_10_up_to_30_days, 0)                as boi_11_up_to_30_days,
+        coalesce(boi_4_statement_of_balance, 0) - coalesce(boi_10_statement_of_balance, 0)  as boi_11_statement_of_balance
+    from pivoted_10, pivoted_4
+),
+
+pivoted_12 as (
+    select
+        coalesce(boi_4_day_1, 0) - coalesce(boi_10_day_1, 0) as boi_12_day_1,
+        coalesce(boi_4_day_2, 0) - coalesce(boi_10_day_2, 0) as boi_12_day_2,
+        coalesce(boi_4_day_3, 0) - coalesce(boi_10_day_3, 0) as boi_12_day_3,
+        coalesce(boi_4_day_4, 0) - coalesce(boi_10_day_4, 0) as boi_12_day_4,
+        coalesce(boi_4_day_5, 0) - coalesce(boi_10_day_5, 0) as boi_12_day_5,
+        coalesce(boi_4_day_6, 0) - coalesce(boi_10_day_6, 0) as boi_12_day_6,
+        coalesce(boi_4_day_7, 0) - coalesce(boi_10_day_7, 0) as boi_12_day_7,
+        coalesce(boi_4_up_to_14_days, 0) - coalesce(boi_10_up_to_14_days, 0) as boi_12_up_to_14_days,
+        coalesce(boi_4_up_to_21_days, 0) - coalesce(boi_10_up_to_21_days, 0) as boi_12_up_to_21_days,
+        coalesce(boi_4_up_to_30_days, 0) - coalesce(boi_10_up_to_30_days, 0) as boi_12_up_to_30_days,
+        coalesce(boi_4_statement_of_balance, 0) - coalesce(boi_10_statement_of_balance, 0) as boi_12_statement_of_balance
+    from pivoted_10, pivoted_4
+),
+
+union_all_calc as (
+    select 1 as boi_code, *
+    from pivoted_1
+
+    union all
+
+    select 2 as boi_code, *
+    from code_2_calculation
+
+    union all
+
+    select 3 as boi_code, *
+    from code_3_calculation
+
+    union all
+
+    select 4 as boi_code, *
+    from pivoted_4
+
+    union all
+
+    select 5 as boi_code, *
+    from code_5_calculation
+
+    union all
+
+    select 6 as boi_code, *
+    from pivoted_6
+
+    union all
+
+    select 7 as boi_code, *
+    from code_7_calculation
+
+    union all
+
+    select 8 as boi_code, *
+    from pivoted_8
+
+    union all
+
+    select 9 as boi_code, *
+    from code_9_calculation
+
+    union all
+
+    select 10 as boi_code, *
+    from pivoted_10
+
+    union all
+
+    select 11 as boi_code, *
+    from pivoted_11
+
+    union all
+
+    select 12 as boi_code, *
+    from pivoted_12
+)
+
+-- Final selection and formatting of the report data.
+select
+    descriptions.boi_code::int as boi_code,
+    descriptions.name,
+    boi_1_day_1 as day_1,
+    boi_1_day_2 as day_2,
+    boi_1_day_3 as day_3,
+    boi_1_day_4 as day_4,
+    boi_1_day_5 as day_5,
+    boi_1_day_6 as day_6,
+    boi_1_day_7 as day_7,
+    boi_1_up_to_14_days as up_to_14_days,
+    boi_1_up_to_21_days as up_to_21_days,
+    boi_1_up_to_30_days as up_to_30_days,
+    boi_1_statement_of_balance as statement_of_balance
+from union_all_calc
+left join {{ object_identifier('datasets/utils/report_843_descriptions') }} descriptions
+on union_all_calc.boi_code = descriptions.boi_code
+where descriptions.report_name = '843-3'
+order by 1

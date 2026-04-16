@@ -1,0 +1,6 @@
+1. delete container
+2. go to terminal -> pocketfultests ->master
+3. run:  pipenv run robot -P src/ -d log/ ../bank_1/tests/run_bank.robot
+4. new docker container will build and all queries will be aligned
+
+** if container already exists it will compare, if not will create new one

@@ -1,0 +1,12 @@
+create venv
+
+1. Each repo has venv
+2. settings-> python interpreter->choose repo
+3. click on the python interpreter -> show all -> in the minus clear all
+4. click "+" -> virtualenv environment 
+    a. location:/Users/amir.s/.loca/share/bank_1
+    b. base interpreter: users/amir.s/.pyenv/versions/3.11.9/bin/python3
+5. go to pipenv environment-> click OK -> virtual venv shall installed under .local
+6. where the +- click to assosiate the interpreter to the project
+7. you can also go to terminal and click -> pipenv shell, I didnt try but shall work
+

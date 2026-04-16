@@ -1,0 +1,13 @@
+1. create aws integration 
+    integration type: AWS Single Sign-on 
+    Alias: AWS SSO 
+    Portal Url: https://d-9367644894.awsapps.com/start/
+    Aws Region: eu-west-1
+    Auth.method: in-browser
+
+2. go to sessions -> Esh-bank-IL (awsDeveloper)
+3. settings-> change region -> US-WEST-1
+4. settings-> names profile -> esh-bank-il-stg5
+5. go to cmd terminal
+    run:
+    aws ssm start-session --profile esh-bank-il-stg5 --region eu-west-1 --target i-0b2183dde1d85fdf3 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters 'host=["stg5.cluster-chq4qx4cqx0e.eu-west-1.rds.amazonaws.com"],portNumber=["3306"],localPortNumber=["3306"]'

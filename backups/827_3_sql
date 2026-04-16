@@ -1,0 +1,218 @@
+-- BOI 827-3: Combined balance sheet aggregation report
+-- Combines report_827_1 (FX/time-categorized) and report_827_2 (balance sheet structure).
+-- Mirrors boi_827_3.py arithmetic exactly: 50 rows x 16 buckets.
+
+with
+rpt1 as (
+    select
+        boi_code::int as rn,
+        bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+        bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+    from table({{ object_identifier('datasets/boi_reports/function_boi_827_1') }}(arg_value_date))
+),
+
+rpt2 as (
+    select
+        boi_code::int as rn,
+        bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+        bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+    from table({{ object_identifier('datasets/boi_reports/function_boi_827_2') }}(arg_value_date))
+),
+
+-- Mapping: (out_rn, r1_rn, r2_rn) — r2_rn=0 means no r2 contribution for that row
+row_map as (
+    select column1::int as out_rn, column2::int as r1_rn, column3::int as r2_rn
+    from (
+        values
+            -- rows 1-5: r1[n] + r2[n]
+            (1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5),
+            -- row 6: r1[6] only
+            (6, 6, 0),
+            -- rows 7-14: r1[n] + r2[n-1]
+            (7, 7, 6), (8, 8, 7), (9, 9, 8), (10, 10, 9),
+            (11, 11, 10), (12, 12, 11), (13, 13, 12), (14, 14, 13),
+            -- rows 16-21: r1[n] + r2[n-1]
+            (16, 16, 15), (17, 17, 16), (18, 18, 17),
+            (19, 19, 18), (20, 20, 19), (21, 21, 20),
+            -- rows 23-25
+            (23, 23, 0), (24, 24, 22), (25, 25, 0),
+            -- rows 27-30
+            (27, 27, 0), (28, 28, 28), (29, 29, 29), (30, 30, 30),
+            -- rows 31-39 (irregular r2 mapping)
+            (31, 31, 27), (32, 32, 28), (33, 33, 29),
+            (34, 34, 0), (35, 35, 30), (36, 36, 0),
+            (37, 37, 32), (38, 38, 0), (39, 39, 34),
+            -- rows 41-45
+            (41, 41, 0), (42, 42, 36), (43, 43, 37), (44, 44, 38), (45, 45, 0),
+            -- rows 48-49
+            (48, 48, 46), (49, 49, 47)
+    )
+),
+
+-- Direct rows: non-aggregate rows computed from rpt1 and rpt2
+direct as (
+    select
+        rmp.out_rn::varchar as boi_code,
+        rp1.bucket_1  + coalesce(rp2.bucket_1,  0)::number(27, 9) as bucket_1,
+        rp1.bucket_2  + coalesce(rp2.bucket_2,  0)::number(27, 9) as bucket_2,
+        rp1.bucket_3  + coalesce(rp2.bucket_3,  0)::number(27, 9) as bucket_3,
+        rp1.bucket_4  + coalesce(rp2.bucket_4,  0)::number(27, 9) as bucket_4,
+        rp1.bucket_5  + coalesce(rp2.bucket_5,  0)::number(27, 9) as bucket_5,
+        rp1.bucket_6  + coalesce(rp2.bucket_6,  0)::number(27, 9) as bucket_6,
+        rp1.bucket_7  + coalesce(rp2.bucket_7,  0)::number(27, 9) as bucket_7,
+        rp1.bucket_8  + coalesce(rp2.bucket_8,  0)::number(27, 9) as bucket_8,
+        rp1.bucket_9  + coalesce(rp2.bucket_9,  0)::number(27, 9) as bucket_9,
+        rp1.bucket_10 + coalesce(rp2.bucket_10, 0)::number(27, 9) as bucket_10,
+        rp1.bucket_11 + coalesce(rp2.bucket_11, 0)::number(27, 9) as bucket_11,
+        rp1.bucket_12 + coalesce(rp2.bucket_12, 0)::number(27, 9) as bucket_12,
+        rp1.bucket_13 + coalesce(rp2.bucket_13, 0)::number(27, 9) as bucket_13,
+        rp1.bucket_14 + coalesce(rp2.bucket_14, 0)::number(27, 9) as bucket_14,
+        rp1.bucket_15 + coalesce(rp2.bucket_15, 0)::number(27, 9) as bucket_15,
+        rp1.bucket_16 + coalesce(rp2.bucket_16, 0)::number(27, 9) as bucket_16
+    from row_map rmp
+    inner join rpt1 rp1 on rmp.r1_rn = rp1.rn
+    left join rpt2 rp2 on rmp.r2_rn = rp2.rn
+),
+
+-- Level 2 aggregates: rows 15, 22, 40 — sums of direct rows
+agg_l2 as (
+    select
+        group_id as boi_code,
+        sum(bucket_1)  as bucket_1,
+        sum(bucket_2)  as bucket_2,
+        sum(bucket_3)  as bucket_3,
+        sum(bucket_4)  as bucket_4,
+        sum(bucket_5)  as bucket_5,
+        sum(bucket_6)  as bucket_6,
+        sum(bucket_7)  as bucket_7,
+        sum(bucket_8)  as bucket_8,
+        sum(bucket_9)  as bucket_9,
+        sum(bucket_10) as bucket_10,
+        sum(bucket_11) as bucket_11,
+        sum(bucket_12) as bucket_12,
+        sum(bucket_13) as bucket_13,
+        sum(bucket_14) as bucket_14,
+        sum(bucket_15) as bucket_15,
+        sum(bucket_16) as bucket_16
+    from (
+        -- row 15 = sum of rows 7..12 (total securities)
+        select *, '15' as group_id from direct where boi_code::int in (7, 8, 9, 10, 11, 12)
+        union all
+        -- row 22 = sum of rows 17, 18, 20 (total credit to public)
+        select *, '22' as group_id from direct where boi_code::int in (17, 18, 20)
+        union all
+        -- row 40 = sum of rows 35, 37, 39 (total public deposits)
+        select *, '40' as group_id from direct where boi_code::int in (35, 37, 39)
+    )
+    group by group_id
+),
+
+combined_l2 as (
+    select * from direct
+    union all
+    select * from agg_l2
+),
+
+-- Level 3 aggregates: rows 26 (total assets) and 46 (total liabilities)
+agg_l3 as (
+    select
+        group_id as boi_code,
+        sum(bucket_1)  as bucket_1,
+        sum(bucket_2)  as bucket_2,
+        sum(bucket_3)  as bucket_3,
+        sum(bucket_4)  as bucket_4,
+        sum(bucket_5)  as bucket_5,
+        sum(bucket_6)  as bucket_6,
+        sum(bucket_7)  as bucket_7,
+        sum(bucket_8)  as bucket_8,
+        sum(bucket_9)  as bucket_9,
+        sum(bucket_10) as bucket_10,
+        sum(bucket_11) as bucket_11,
+        sum(bucket_12) as bucket_12,
+        sum(bucket_13) as bucket_13,
+        sum(bucket_14) as bucket_14,
+        sum(bucket_15) as bucket_15,
+        sum(bucket_16) as bucket_16
+    from (
+        -- row 26 = sum of rows 1, 3, 5, 15, 16, 22, 23, 24, 25 (total assets)
+        select *, '26' as group_id from combined_l2 where boi_code::int in (1, 3, 5, 15, 16, 22, 23, 24, 25)
+        union all
+        -- row 46 = sum of rows 31, 32, 33, 40, 41, 42, 43, 44, 45 (total liabilities)
+        select *, '46' as group_id from combined_l2 where boi_code::int in (31, 32, 33, 40, 41, 42, 43, 44, 45)
+    )
+    group by group_id
+),
+
+combined_l3 as (
+    select * from combined_l2
+    union all
+    select * from agg_l3
+),
+
+-- Row 47 = row 26 minus row 46 (assets minus liabilities gap before derivatives)
+row_47 as (
+    select
+        '47' as boi_code,
+        row26.bucket_1  - row46.bucket_1  as bucket_1,
+        row26.bucket_2  - row46.bucket_2  as bucket_2,
+        row26.bucket_3  - row46.bucket_3  as bucket_3,
+        row26.bucket_4  - row46.bucket_4  as bucket_4,
+        row26.bucket_5  - row46.bucket_5  as bucket_5,
+        row26.bucket_6  - row46.bucket_6  as bucket_6,
+        row26.bucket_7  - row46.bucket_7  as bucket_7,
+        row26.bucket_8  - row46.bucket_8  as bucket_8,
+        row26.bucket_9  - row46.bucket_9  as bucket_9,
+        row26.bucket_10 - row46.bucket_10 as bucket_10,
+        row26.bucket_11 - row46.bucket_11 as bucket_11,
+        row26.bucket_12 - row46.bucket_12 as bucket_12,
+        row26.bucket_13 - row46.bucket_13 as bucket_13,
+        row26.bucket_14 - row46.bucket_14 as bucket_14,
+        row26.bucket_15 - row46.bucket_15 as bucket_15,
+        row26.bucket_16 - row46.bucket_16 as bucket_16
+    from combined_l3 row26
+    cross join combined_l3 row46
+    where row26.boi_code = '26'
+    and row46.boi_code = '46'
+),
+
+combined_l4 as (
+    select * from combined_l3
+    union all
+    select * from row_47
+),
+
+-- Row 50 = sum of rows 47, 48, 49 (total gap after derivatives)
+row_50 as (
+    select
+        '50' as boi_code,
+        sum(bucket_1)  as bucket_1,
+        sum(bucket_2)  as bucket_2,
+        sum(bucket_3)  as bucket_3,
+        sum(bucket_4)  as bucket_4,
+        sum(bucket_5)  as bucket_5,
+        sum(bucket_6)  as bucket_6,
+        sum(bucket_7)  as bucket_7,
+        sum(bucket_8)  as bucket_8,
+        sum(bucket_9)  as bucket_9,
+        sum(bucket_10) as bucket_10,
+        sum(bucket_11) as bucket_11,
+        sum(bucket_12) as bucket_12,
+        sum(bucket_13) as bucket_13,
+        sum(bucket_14) as bucket_14,
+        sum(bucket_15) as bucket_15,
+        sum(bucket_16) as bucket_16
+    from combined_l4
+    where boi_code::int in (47, 48, 49)
+)
+
+select boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from combined_l4
+
+union all
+
+select boi_code, bucket_1, bucket_2, bucket_3, bucket_4, bucket_5, bucket_6, bucket_7, bucket_8,
+       bucket_9, bucket_10, bucket_11, bucket_12, bucket_13, bucket_14, bucket_15, bucket_16
+from row_50
+
+order by boi_code::int

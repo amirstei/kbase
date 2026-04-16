@@ -1,0 +1,11 @@
+-- Docker
+Docker -> pocketfuldb -> play
+
+-- Leapp
+Session: Esh-bank-il
+Role: AWSDEVSDB
+Region: EU-WEST-1
+Profile name: esh-bank-il-stg5 (edit manually)
+
+start session -> open terminal and run:
+aws ssm start-session --profile esh-bank-il-stg5 --region eu-west-1 --target i-0b2183dde1d85fdf3 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters 'host=["stg5.cluster-chq4qx4cqx0e.eu-west-1.rds.amazonaws.com"],portNumber=["3306"],localPortNumber=["3306"]'

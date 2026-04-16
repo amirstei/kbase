@@ -1,0 +1,2 @@
+python src/main.py -t datasets -r datasets/utils --render // מריץ את הפקודות שיש להם טאג של דאטהסטס
+

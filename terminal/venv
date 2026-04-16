@@ -1,0 +1,9 @@
+pipenv --venv // the venv path
+pipenv install // install the virtual env in the .Local, sometimes create new env
+pipenv shell / source <copy from pipenv --venv>/bin/activate // activate the venv
+
+1. metabase
+aws ssm start-session --profile esh-bank-il-stg5 --target i-0b2183dde1d85fdf3 --region eu-west-1 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters '{"portNumber":["80"],"localPortNumber":["8081"],"host":["internal-metabase-webapp-739276740.eu-west-1.elb.amazonaws.com"]}'
+
+ 2. stg5
+aws ssm start-session --profile esh-bank-il-stg5 --region eu-west-1 --target i-0b2183dde1d85fdf3 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters 'host=["stg5.cluster-chq4qx4cqx0e.eu-west-1.rds.amazonaws.com"],portNumber=["3306"],localPortNumber=["3306"]'

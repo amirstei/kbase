@@ -1,0 +1,20 @@
+import datetime
+from dblib.common import db, db_repo
+from services.fin_reports import tracking_metrics_843_4, liquidity_final_report, credit_and_assets_balance_843_1
+
+from robots.liquidity_dashboard import liquidity_dashboard_liquidity_parameters
+from pprint import pprint
+import decimal
+import csv
+
+if __name__ == '__main__':
+    conn = db.Db()
+    conn.env(env_path='/Users/amir.s/documents/projects/bank_1/.env_stg6')
+    conn.connect()
+
+    with db_repo.db_context(conn.cursor()) as repo:
+        res = liquidity_final_report.get_liquidity_final_report(datetime.date(2025, 1, 22))
+        print(res)
+
+
+        # res = liquidity_final_report.get_liquidity_final_report(datetime.date(2023, 12, 31))

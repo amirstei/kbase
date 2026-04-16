@@ -1,0 +1,15 @@
+-- run in terminal
+python src/main.py -t datasets -r datasets/utils --render // מריץ את הפקודות שיש להם טאג של דאטהסטס
+
+
+-- look for the scripts
+insert overwrite into mimic_datasets.utils.report_823_descriptions
+(report_name, boi_code, type_id, type_name, description_id, description)
+select
+        report_name,
+        boi_code,
+        type_id,
+        type_name,
+        description_id,
+        description
+from mimic_raw.seed.report_823_descriptions

@@ -1,0 +1,15 @@
+Key Terms Related to Workload
+
+Database: System for capturing and storing structured data
+
+OLTP: Database optimized for many small transactions
+
+OLAP: Database optimized for analyzing aggregated historical data
+
+Data warehouse: System optimized for retrieving and understanding relationships and trends within data
+
+Data Mart: A subset of data for a department or line of business.
+
+Concurrency: Simultaneous users or queries (causes bottlenecks)
+
+Business Intelligence (BI): Analyzing data to make better business decisions

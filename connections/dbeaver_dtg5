@@ -1,0 +1,6 @@
+1. start leap stg_5
+2. approve AWS connection
+3. approve OKTA
+4. open terminal and run the script:
+aws ssm start-session --profile esh-bank-il-stg5 --region eu-west-1 --target i-0b2183dde1d85fdf3 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters 'host=["stg5.cluster-chq4qx4cqx0e.eu-west-1.rds.amazonaws.com"],portNumber=["3306"],localPortNumber=["3306"]'
+5. Go to dbeaver -> connect the db
